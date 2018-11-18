@@ -112,7 +112,7 @@ class Node:
         return {'median': median, 'left': left, 'right': right}
 
     def remove_key(self, key):
-
+        return
 
 node = BTree()
 # node.add_key(7)
@@ -141,6 +141,4 @@ node.add_key(5)
 node.add_key(6)
 node.add_key(7)
 
-pdb.set_trace()
-print(node.count())
-print(node.keys, node.children)
+# pdb.set_trace()
