@@ -96,12 +96,13 @@ class TestBTree(unittest.TestCase):
         while len(keys) > 0:
             samp = numpy.random.choice(keys)
             self.btree.add_key(samp)
+            # if self.btree.num_keys >= 5:
+            #     pdb.set_trace()
             keys.remove(samp)
 
         root = self.btree.root
         left_child = root.children[0]
         right_child = root.children[1]
-        pdb.set_trace()
         left_left_child = left_child.children[0]
         left_right_child = left_child.children[1]
         right_left_child = right_child.children[0]
