@@ -9,7 +9,6 @@ class BTree:
     def add_key(self, key):
         self.num_keys += 1
         res = self.root.add_key(key)
-        # pdb.set_trace()
         if res:
             self.root.keys = [res['median']]
             self.root.children = [res['left'], res['right']]
@@ -20,7 +19,6 @@ class BTree:
         self.root.remove_key(key)
 
         if self.root.is_empty():
-            pdb.set_trace()
             self.root = self.root.children[0]
 
 class Node:
@@ -212,20 +210,19 @@ class Node:
                         new_separator = right_leaf.keys[0]
                         self.keys.insert(i, new_separator)
                         child_idx = i+1
-                        # pdb.set_trace()
                         res = self.children[i+1].remove_key(new_separator)
                     break
 
                 # If we didn't find the key yet, and it's less than the
-                # current element, then it must be in a child node if it
-                # exists in the tree at all
+                # current element, then it should live in the subtree of
+                # this child
                 elif key < self.keys[i]:
                     found_child = True
                     res = self.children[i].remove_key(key)
                     child_idx = i
                     break
 
-            # If we still didn't find it, it's in the last child
+            # If we still didn't find it, it's in the last child's subtree
             if not found_child and not found_key:
                 res = self.children[-1].remove_key(key)
                 child_idx = len(self.children) - 1
@@ -233,63 +230,66 @@ class Node:
             # having a res implies underflow occurred when removing key
             # from child and we must restructure the tree
             if res:
-                child = self.children[child_idx]
+                return self.rebalance(child_idx)
 
-                # Try to rotate from right sibling first, if it has
-                # enough keys to give up one
-                if len(self.children) > (child_idx + 1) and self.children[child_idx+1].can_give_up_keys():
-                    sibling = self.children[child_idx+1]
-                    closest_key = sibling.keys[0]
-                    rotate_key = self.keys[child_idx]
+    def rebalance(self, child_idx):
+        child = self.children[child_idx]
 
-                    sibling.keys.remove(closest_key)
-                    self.keys.remove(rotate_key)
-                    self.keys.insert(child_idx, closest_key)
-                    child.add_key(rotate_key)
+        # Try to rotate from right sibling first, if it has
+        # enough keys to give up one
+        if len(self.children) > (child_idx + 1) and self.children[child_idx+1].can_give_up_keys():
+            sibling = self.children[child_idx+1]
+            closest_key = sibling.keys[0]
+            rotate_key = self.keys[child_idx]
 
-                # Otherwise, try  to rotate from left child
-                elif (child_idx - 1) >= 0 and self.children[child_idx-1].can_give_up_keys():
-                        sibling = self.children[child_idx-1]
-                        closest_key = sibling.keys[-1]
-                        rotate_key = self.keys[child_idx-1]
+            sibling.keys.remove(closest_key)
+            self.keys.remove(rotate_key)
+            self.keys.insert(child_idx, closest_key)
+            child.add_key(rotate_key)
 
-                        sibling.keys.remove(closest_key)
-                        self.keys.remove(rotate_key)
-                        self.keys.insert(child_idx-1, closest_key)
-                        child.add_key(rotate_key)
+        # Otherwise, try  to rotate from left child
+        elif (child_idx - 1) >= 0 and self.children[child_idx-1].can_give_up_keys():
+                sibling = self.children[child_idx-1]
+                closest_key = sibling.keys[-1]
+                rotate_key = self.keys[child_idx-1]
 
-                # Otherwise, must merge siblings
-                else:
-                    # if it's last child then merge with left sibling
-                    if child_idx == self.count():
-                        sibling = self.children[child_idx-1]
-                        separator = self.keys[-1]
+                sibling.keys.remove(closest_key)
+                self.keys.remove(rotate_key)
+                self.keys.insert(child_idx-1, closest_key)
+                child.add_key(rotate_key)
 
-                        sibling.keys.append(separator)
-                        self.keys.pop()
-                        sibling.keys = sibling.keys + child.keys
-                        sibling.children = sibling.children + child.children
-                        self.children.pop()
+        # Otherwise, must merge siblings
+        else:
+            # if it's last child then merge with left sibling
+            if child_idx == self.count():
+                sibling = self.children[child_idx-1]
+                separator = self.keys[-1]
 
-                        # reassign child_idx to use in case parent has
-                        # gone through underflow
-                        child_idx -= 1
+                sibling.keys.append(separator)
+                self.keys.pop()
+                sibling.keys = sibling.keys + child.keys
+                sibling.children = sibling.children + child.children
+                self.children.pop()
 
-                    # otherwise merge with right sibling
-                    else:
-                        sibling = self.children[child_idx+1]
-                        separator = self.keys[child_idx]
+                # reassign child_idx to use in case parent has
+                # gone through underflow
+                child_idx -= 1
 
-                        sibling.keys.insert(0, separator)
-                        self.keys.remove(separator)
-                        sibling.keys = child.keys + sibling.keys
-                        sibling.children = child.children + sibling.children
-                        self.children.remove(child)
+            # otherwise merge with right sibling
+            else:
+                sibling = self.children[child_idx+1]
+                separator = self.keys[child_idx]
 
-                    # Internal node may now be under because of merge
-                    # operation - may need to rebalance
-                    if self.is_deficient():
-                        return True
+                sibling.keys.insert(0, separator)
+                self.keys.remove(separator)
+                sibling.keys = child.keys + sibling.keys
+                sibling.children = child.children + sibling.children
+                self.children.remove(child)
+
+            # Internal node may now be under because of merge
+            # operation - may need to rebalance
+            if self.is_deficient():
+                return True
 # btree = BTree(4)
 # btree.add_key(1)
 # btree.add_key(2)
