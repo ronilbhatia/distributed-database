@@ -1,4 +1,5 @@
 import pdb
+import uuid
 
 class BTree:
     def __init__(self, max_keys = 2):
@@ -9,9 +10,10 @@ class BTree:
     def add_key(self, key):
         self.num_keys += 1
         res = self.root.add_key(key)
+
         if res:
             self.root.keys = [res['median']]
-            self.root.children = [res['left'], res['right']]
+            self.root.children_ids = [res['left_id'], res['right_id']]
             return res
 
     def remove_key(self, key):
@@ -19,37 +21,45 @@ class BTree:
         self.root.remove_key(key)
 
         if self.root.is_empty():
-            self.root = self.root.children[0]
+            self.root = Node.get_node(self.root.children_ids[0])
 
 class Node:
+    # Class variable to store all nodes
+    nodes = {}
+
+    @classmethod
+    def get_node(self, id):
+        return self.nodes.get(id)
+
     def __init__(self, keys = [], max_keys = 2):
         self.keys = keys
         self.max_keys = max_keys
         self.min_keys = max_keys // 2
-        # TODO: Look up how to generate random string in python
-        self.identifier = 2
-        self.children = []
-        # self.children_identifiers = []
-        # TODO:  define a class variable with hashmap to store all nodes, with
-        # keys as identifiers, and values as nodes
+        self.id = uuid.uuid4()
 
-    # TODO: this needs to be a global method - lookup how to do that
-    @classmethod
-    def get_node(identifier):
-        # key into hash map at identifer
-        pass
+        # Add node to hash map, ensuring it has a unique id
+        while Node.get_node(self.id) is not None:
+            self.id = uuid.uuid4()
+        Node.nodes[self.id] = self
+
+        self.children_ids = []
+
 
     # see if these methods would be helpful
-    def get_child_at_index(self):
-        pass
+    def get_child_at_index(self, child_idx):
+        if child_idx < 0 or child_idx >= len(self.children_ids):
+            return None
+        else:
+            return Node.get_node(self.children_ids[child_idx])
 
     def set_child_at_index(self):
         pass
 
     # gives a list comprehension, taking each child id and looking up in
     # hash map
-    def children(self):
-        pass
+    def get_children(self):
+        children = [Node.get_node(id) for id in self.children_ids]
+        return children
 
     def count(self):
         return len(self.keys)
@@ -61,7 +71,7 @@ class Node:
         return self.count() == 0
 
     def is_leaf(self):
-        return len(self.children) == 0
+        return len(self.children_ids) == 0
 
     def can_give_up_keys(self):
         return self.min_keys < self.count()
@@ -86,31 +96,32 @@ class Node:
             else:
                 return self.split(key)
         else:
+            children = self.get_children()
             # if the node is not a leaf we must find the appropriate
             # child to attempt to add the key to
             for i in range(self.count()):
                 found_child = False
                 if key < self.keys[i]:
                     found_child = True
-                    res = self.children[i].add_key(key)
+                    res = children[i].add_key(key)
                     child_idx = i
                     break
             # if we didn't find a child it must be the last child
             if not found_child:
-                res = self.children[-1].add_key(key)
-                child_idx = len(self.children) - 1
+                res = children[-1].add_key(key)
+                child_idx = len(children) - 1
             # if we have a res that implies the child had to be split
             if res:
                 median = res['median']
-                left = res['left']
-                right = res['right']
+                left_id = res['left_id']
+                right_id = res['right_id']
 
                 # We will add the left and right nodes as children of
                 # the node on either side of the median value regardless
                 # of whether the node is full or not and must be split.
-                del self.children[child_idx]
-                self.children.insert(child_idx, left)
-                self.children.insert(child_idx + 1, right)
+                del self.children_ids[child_idx]
+                self.children_ids.insert(child_idx, left_id)
+                self.children_ids.insert(child_idx + 1, right_id)
 
                 # If the node has space we can add the median value on
                 if not self.is_full():
@@ -139,30 +150,31 @@ class Node:
         # split up the node into left, right, and median
         median = self.keys[mid_idx]
         left = Node(self.keys[0:mid_idx], self.max_keys)
-        left.children = self.children[0:mid_idx+1]
+        left.children_ids = self.children_ids[0:mid_idx+1]
         right = Node(self.keys[mid_idx+1:], self.max_keys)
-        right.children = self.children[mid_idx+1:]
-        return {'median': median, 'left': left, 'right': right}
+        right.children_ids = self.children_ids[mid_idx+1:]
+
+        return {'median': median, 'left_id': left.id, 'right_id': right.id}
 
     def find_left_leaf(self, i):
         # initially set leaf to left child
-        curr_node = self.children[i]
+        curr_node = self.get_child_at_index(i)
 
         # continue to reassign leaf to right-most child until the node
         # has no children (i.e. it is a leaf)
-        while len(curr_node.children) > 0:
-            curr_node = curr_node.children[-1]
+        while len(curr_node.children_ids) > 0:
+            curr_node = Node.get_node(curr_node.children_ids[-1])
 
         return curr_node
 
     def find_right_leaf(self, i):
         # initially set leaf to right child
-        curr_node = self.children[i+1]
+        curr_node = self.get_child_at_index(i+1)
 
         # continue to reassign leaf to left-most child until the node
         # has no children (i.e. it is a leaf)
-        while len(curr_node.children) > 0:
-            curr_node = curr_node.children[0]
+        while len(curr_node.children_ids) > 0:
+            curr_node = Node.get_node(curr_node.children_ids[0])
 
         return curr_node
 
@@ -179,6 +191,7 @@ class Node:
             if self.count() < self.min_keys:
                 return True
         else:
+            children = self.get_children()
             found_child = False
             found_key = False
             # if the node is not a leaf we attempt to find the key in
@@ -203,14 +216,14 @@ class Node:
                         # Even though we've found the key in the leaf,
                         # use our method on the current node we are on
                         # incase recursive rebalancing is necessary
-                        res = self.children[i].remove_key(new_separator)
+                        res = children[i].remove_key(new_separator)
 
                     # Otherwise, take from right leaf
                     else:
                         new_separator = right_leaf.keys[0]
                         self.keys.insert(i, new_separator)
                         child_idx = i+1
-                        res = self.children[i+1].remove_key(new_separator)
+                        res = children[i+1].remove_key(new_separator)
                     break
 
                 # If we didn't find the key yet, and it's less than the
@@ -218,14 +231,14 @@ class Node:
                 # this child
                 elif key < self.keys[i]:
                     found_child = True
-                    res = self.children[i].remove_key(key)
+                    res = children[i].remove_key(key)
                     child_idx = i
                     break
 
             # If we still didn't find it, it's in the last child's subtree
             if not found_child and not found_key:
-                res = self.children[-1].remove_key(key)
-                child_idx = len(self.children) - 1
+                res = children[-1].remove_key(key)
+                child_idx = len(children) - 1
 
             # having a res implies underflow occurred when removing key
             # from child and we must restructure the tree
@@ -233,27 +246,26 @@ class Node:
                 return self.rebalance(child_idx)
 
     def rebalance(self, child_idx):
-        child = self.children[child_idx]
+        child = self.get_child_at_index(child_idx)
+        left_sibling = self.get_child_at_index(child_idx - 1)
+        right_sibling = self.get_child_at_index(child_idx + 1)
 
-        # Try to rotate from right sibling first, if it has
-        # enough keys to give up one
-        if len(self.children) > (child_idx + 1) and self.children[child_idx+1].can_give_up_keys():
-            sibling = self.children[child_idx+1]
-            closest_key = sibling.keys[0]
+        # Try to rotate from right sibling first, if it can give up keys
+        if right_sibling is not None and right_sibling.can_give_up_keys():
+            closest_key = right_sibling.keys[0]
             rotate_key = self.keys[child_idx]
 
-            sibling.keys.remove(closest_key)
+            right_sibling.keys.remove(closest_key)
             self.keys.remove(rotate_key)
             self.keys.insert(child_idx, closest_key)
             child.add_key(rotate_key)
 
-        # Otherwise, try  to rotate from left child
-        elif (child_idx - 1) >= 0 and self.children[child_idx-1].can_give_up_keys():
-                sibling = self.children[child_idx-1]
-                closest_key = sibling.keys[-1]
+        # Otherwise, try  to rotate from left sibling
+        elif left_sibling is not None and left_sibling.can_give_up_keys():
+                closest_key = left_sibling.keys[-1]
                 rotate_key = self.keys[child_idx-1]
 
-                sibling.keys.remove(closest_key)
+                left_sibling.keys.remove(closest_key)
                 self.keys.remove(rotate_key)
                 self.keys.insert(child_idx-1, closest_key)
                 child.add_key(rotate_key)
@@ -262,34 +274,29 @@ class Node:
         else:
             # if it's last child then merge with left sibling
             if child_idx == self.count():
-                sibling = self.children[child_idx-1]
                 separator = self.keys[-1]
 
-                sibling.keys.append(separator)
+                left_sibling.keys.append(separator)
                 self.keys.pop()
-                sibling.keys = sibling.keys + child.keys
-                sibling.children = sibling.children + child.children
-                self.children.pop()
-
-                # reassign child_idx to use in case parent has
-                # gone through underflow
-                child_idx -= 1
+                left_sibling.keys = left_sibling.keys + child.keys
+                left_sibling.children_ids = left_sibling.children_ids + child.children_ids
+                self.children_ids.pop()
 
             # otherwise merge with right sibling
             else:
-                sibling = self.children[child_idx+1]
                 separator = self.keys[child_idx]
 
-                sibling.keys.insert(0, separator)
+                right_sibling.keys.insert(0, separator)
                 self.keys.remove(separator)
-                sibling.keys = child.keys + sibling.keys
-                sibling.children = child.children + sibling.children
-                self.children.remove(child)
+                right_sibling.keys = child.keys + right_sibling.keys
+                right_sibling.children_ids = child.children_ids + right_sibling.children_ids
+                self.children_ids.remove(child.id)
 
             # Internal node may now be under because of merge
             # operation - may need to rebalance
             if self.is_deficient():
                 return True
+
 # btree = BTree(4)
 # btree.add_key(1)
 # btree.add_key(2)
