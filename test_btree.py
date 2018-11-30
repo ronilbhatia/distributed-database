@@ -8,8 +8,8 @@ class TestNode(unittest.TestCase):
     def setUp(self):
         self.node = btree.Node([])
 
-    def test_count(self):
-        self.assertEqual(self.node.count(), 0, 'Incorrect starting count')
+    def test_num_keys(self):
+        self.assertEqual(self.node.num_keys(), 0, 'Incorrect starting number of keys')
 
     def test_add_key(self):
         self.node.add_key(1)

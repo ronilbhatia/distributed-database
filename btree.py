@@ -61,26 +61,26 @@ class Node:
         children = [Node.get_node(id) for id in self.children_ids]
         return children
 
-    def count(self):
+    def num_keys(self):
         return len(self.keys)
 
     def is_full(self):
-        return self.count() == self.max_keys
+        return self.num_keys() == self.max_keys
 
     def overflow(self):
-        return self.count() > self.max_keys
+        return self.num_keys() > self.max_keys
 
     def is_empty(self):
-        return self.count() == 0
+        return self.num_keys() == 0
 
     def is_leaf(self):
         return len(self.children_ids) == 0
 
     def can_give_up_keys(self):
-        return self.min_keys < self.count()
+        return self.min_keys < self.num_keys()
 
     def is_deficient(self):
-        return self.count() < self.min_keys
+        return self.num_keys() < self.min_keys
 
     def add_key(self, key):
         # Check if node is leaf - if so attempt to add
@@ -91,7 +91,7 @@ class Node:
 
     def add_key_leaf(self, key):
         is_inserted = False
-        for i in range(self.count()):
+        for i in range(self.num_keys()):
             if key < self.keys[i]:
                 self.keys.insert(i, key)
                 is_inserted = True
@@ -110,7 +110,7 @@ class Node:
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
         found_child = False
-        for i in range(self.count()):
+        for i in range(self.num_keys()):
             if key < self.keys[i]:
                 found_child = True
                 res = children[i].add_key(key)
@@ -181,69 +181,75 @@ class Node:
     def remove_key(self, key):
         # Check if node is leaf - attempt to remove key directly
         if self.is_leaf():
-            try:
-                self.keys.remove(key)
-            except:
-                print("key does not exist")
-                return
-
-            # Check it underflow has occurred and need to rebalance
-            if self.count() < self.min_keys:
-                return True
+            return self.remove_key_leaf(key)
         else:
-            children = self.get_children()
-            found_child = False
-            found_key = False
-            # if the node is not a leaf we attempt to find the key in
-            # the node itself or find the appropriate child where the
-            # key should be if it exists in the tree
-            for i in range(self.count()):
-                # Check if key is actually contained in node
-                if key == self.keys[i]:
-                    # logic for deleting key in internal node
-                    found_key = True
-                    self.keys.remove(key)
+            return self.remove_key_internal(key)
 
-                    left_leaf = self.find_left_leaf(i)
-                    right_leaf = self.find_right_leaf(i)
+    def remove_key_leaf(self, key):
+        try:
+            self.keys.remove(key)
+        except:
+            print("key does not exist")
+            return
 
-                    # Take from left leaf if it can give up keys
-                    if left_leaf.can_give_up_keys():
-                        new_separator = left_leaf.keys[-1]
-                        self.keys.insert(i, new_separator)
-                        child_idx = i
+        # Check it underflow has occurred and need to rebalance
+        if self.num_keys() < self.min_keys:
+            return True
 
-                        # Even though we've found the key in the leaf,
-                        # use our method on the current node we are on
-                        # incase recursive rebalancing is necessary
-                        res = children[i].remove_key(new_separator)
+    def remove_key_internal(self, key):
+        children = self.get_children()
+        found_child = False
+        found_key = False
+        # if the node is not a leaf we attempt to find the key in
+        # the node itself or find the appropriate child where the
+        # key should be if it exists in the tree
+        for i in range(self.num_keys()):
+            # Check if key is actually contained in node
+            if key == self.keys[i]:
+                # logic for deleting key in internal node
+                found_key = True
+                self.keys.remove(key)
 
-                    # Otherwise, take from right leaf
-                    else:
-                        new_separator = right_leaf.keys[0]
-                        self.keys.insert(i, new_separator)
-                        child_idx = i+1
-                        res = children[i+1].remove_key(new_separator)
-                    break
+                left_leaf = self.find_left_leaf(i)
+                right_leaf = self.find_right_leaf(i)
 
-                # If we didn't find the key yet, and it's less than the
-                # current element, then it should live in the subtree of
-                # this child
-                elif key < self.keys[i]:
-                    found_child = True
-                    res = children[i].remove_key(key)
+                # Take from left leaf if it can give up keys
+                if left_leaf.can_give_up_keys():
+                    new_separator = left_leaf.keys[-1]
+                    self.keys.insert(i, new_separator)
                     child_idx = i
-                    break
 
-            # If we still didn't find it, it's in the last child's subtree
-            if not found_child and not found_key:
-                res = children[-1].remove_key(key)
-                child_idx = len(children) - 1
+                    # Even though we've found the key in the leaf,
+                    # use our method on the current node we are on
+                    # incase recursive rebalancing is necessary
+                    res = children[i].remove_key(new_separator)
 
-            # having a res implies underflow occurred when removing key
-            # from child and we must restructure the tree
-            if res:
-                return self.rebalance(child_idx)
+                # Otherwise, take from right leaf
+                else:
+                    new_separator = right_leaf.keys[0]
+                    self.keys.insert(i, new_separator)
+                    child_idx = i+1
+                    res = children[i+1].remove_key(new_separator)
+                break
+
+            # If we didn't find the key yet, and it's less than the
+            # current element, then it should live in the subtree of
+            # this child
+            elif key < self.keys[i]:
+                found_child = True
+                res = children[i].remove_key(key)
+                child_idx = i
+                break
+
+        # If we still didn't find it, it's in the last child's subtree
+        if not found_child and not found_key:
+            res = children[-1].remove_key(key)
+            child_idx = len(children) - 1
+
+        # having a res implies underflow occurred when removing key
+        # from child and we must restructure the tree
+        if res:
+            return self.rebalance(child_idx)
 
     def rebalance(self, child_idx):
         child = self.get_child_at_index(child_idx)
@@ -252,61 +258,79 @@ class Node:
 
         # Try to rotate from right sibling first, if it can give up keys
         if right_sibling is not None and right_sibling.can_give_up_keys():
-            closest_key = right_sibling.keys[0]
-            rotate_key = self.keys[child_idx]
-
-            right_sibling.keys.remove(closest_key)
-            self.keys.remove(rotate_key)
-            self.keys.insert(child_idx, closest_key)
-            # TODO:  Make sure to move children_ids appropriately as well
-            child.add_key(rotate_key)
+            return self.rotate_left(child, child_idx, right_sibling)
 
         # Otherwise, try  to rotate from left sibling
         elif left_sibling is not None and left_sibling.can_give_up_keys():
-            closest_key = left_sibling.keys[-1]
-            rotate_key = self.keys[child_idx-1]
-
-            left_sibling.keys.remove(closest_key)
-            self.keys.remove(rotate_key)
-            self.keys.insert(child_idx-1, closest_key)
-            # TODO:  Make sure to move children_ids appropriately as well
-            child.add_key(rotate_key)
+            return self.rotate_right(child, child_idx, left_sibling)
 
         # Otherwise, must merge siblings
         else:
             # if it's last child then merge with left sibling
-            if child_idx == self.count():
-                separator = self.keys[-1]
-
-                left_sibling.keys.append(separator)
-                self.keys.pop()
-                left_sibling.keys = left_sibling.keys + child.keys
-                left_sibling.children_ids = left_sibling.children_ids + child.children_ids
-                self.children_ids.pop()
+            if child_idx == self.num_keys():
+                self.merge_left(child, left_sibling)
 
             # otherwise merge with right sibling
             else:
-                separator = self.keys[child_idx]
-
-                right_sibling.keys.insert(0, separator)
-                self.keys.remove(separator)
-                right_sibling.keys = child.keys + right_sibling.keys
-                right_sibling.children_ids = child.children_ids + right_sibling.children_ids
-                self.children_ids.remove(child.id)
+                self.merge_right(child, child_idx, right_sibling)
 
             # Internal node may now be under because of merge
             # operation - may need to rebalance
             if self.is_deficient():
                 return True
 
-btree = BTree(2)
-btree.add_key(1)
-btree.add_key(2)
-btree.add_key(3)
-btree.add_key(4)
-btree.add_key(5)
-btree.add_key(5)
-pdb.set_trace()
+    def rotate_left(self, child, child_idx, right_sibling):
+        closest_key = right_sibling.keys[0]
+        rotate_key = self.keys[child_idx]
+
+        right_sibling.keys.remove(closest_key)
+        self.keys.remove(rotate_key)
+        self.keys.insert(child_idx, closest_key)
+        if not right_sibling.is_leaf():
+            new_child_id = right_sibling.children_ids[0]
+            self.children_ids.append(new_child_id)
+            right_sibling.children_ids.remove(new_child_id)
+        child.add_key(rotate_key)
+
+    def rotate_right(self, child, child_idx, left_sibling):
+        closest_key = left_sibling.keys[-1]
+        rotate_key = self.keys[child_idx-1]
+
+        left_sibling.keys.remove(closest_key)
+        self.keys.remove(rotate_key)
+        self.keys.insert(child_idx-1, closest_key)
+        if not left_sibling.is_leaf():
+            new_child_id = left_sibling.children_ids[-1]
+            self.children_ids.insert(0, new_child_id)
+            right_sibling.children_ids.remove(new_child_id)
+        child.add_key(rotate_key)
+
+    def merge_left(self, child, left_sibling):
+        separator = self.keys[-1]
+
+        left_sibling.keys.append(separator)
+        self.keys.pop()
+        left_sibling.keys = left_sibling.keys + child.keys
+        left_sibling.children_ids = left_sibling.children_ids + child.children_ids
+        self.children_ids.pop()
+
+    def merge_right(self, child, child_idx, right_sibling):
+        separator = self.keys[child_idx]
+
+        right_sibling.keys.insert(0, separator)
+        self.keys.remove(separator)
+        right_sibling.keys = child.keys + right_sibling.keys
+        right_sibling.children_ids = child.children_ids + right_sibling.children_ids
+        self.children_ids.remove(child.id)
+
+# btree = BTree(2)
+# btree.add_key(1)
+# btree.add_key(2)
+# btree.add_key(3)
+# btree.add_key(4)
+# btree.add_key(5)
+# btree.add_key(5)
+# pdb.set_trace()
 # btree.add_key(6)
 # btree.add_key(7)
 # btree.add_key(8)
@@ -320,41 +344,41 @@ pdb.set_trace()
 # btree.add_key(16)
 # btree.add_key(17)
 # btree.root.remove_key(11)
-# btree = BTree(5)
-# btree.add_key('A')
-# btree.add_key('B')
-# btree.add_key('C')
-# btree.add_key('D')
-# btree.add_key('E')
-# btree.add_key('F')
-# btree.add_key('G')
-# btree.add_key('H')
-# btree.add_key('I')
-# btree.add_key('J')
-# btree.add_key('K')
-# btree.add_key('L')
-# btree.add_key('M')
-# btree.add_key('N')
-# btree.add_key('O')
-# btree.add_key('P')
-# btree.add_key('Q')
-# btree.add_key('R')
-# btree.add_key('S')
-# btree.add_key('T')
-# btree.add_key('U')
-# btree.add_key('V')
-# btree.add_key('W')
-# btree.add_key('X')
-# btree.add_key('Y')
-# btree.add_key('Z')
-# btree.remove_key('G')
-# btree.remove_key('L')
-# btree.remove_key('M')
-# btree.remove_key('H')
-# btree.remove_key('Z')
-# btree.remove_key('U')
-# btree.remove_key('N')
-# btree.remove_key('O')
-# btree.remove_key('F')
-# btree.remove_key('J')
+btree = BTree(5)
+btree.add_key('A')
+btree.add_key('B')
+btree.add_key('C')
+btree.add_key('D')
+btree.add_key('E')
+btree.add_key('F')
+btree.add_key('G')
+btree.add_key('H')
+btree.add_key('I')
+btree.add_key('J')
+btree.add_key('K')
+btree.add_key('L')
+btree.add_key('M')
+btree.add_key('N')
+btree.add_key('O')
+btree.add_key('P')
+btree.add_key('Q')
+btree.add_key('R')
+btree.add_key('S')
+btree.add_key('T')
+btree.add_key('U')
+btree.add_key('V')
+btree.add_key('W')
+btree.add_key('X')
+btree.add_key('Y')
+btree.add_key('Z')
+btree.remove_key('G')
+btree.remove_key('L')
+btree.remove_key('M')
+btree.remove_key('H')
+btree.remove_key('Z')
+btree.remove_key('U')
+btree.remove_key('N')
+btree.remove_key('O')
+btree.remove_key('F')
+btree.remove_key('J')
 pdb.set_trace()
