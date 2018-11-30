@@ -96,6 +96,9 @@ class Node:
                 self.keys.insert(i, key)
                 is_inserted = True
                 break
+            elif key == self.keys[i]:
+                print("key already exists")
+                return
         if not is_inserted:
             self.keys.append(key)
         # if the node is overflowed we need to split it
@@ -113,6 +116,9 @@ class Node:
                 res = children[i].add_key(key)
                 child_idx = i
                 break
+            elif key == self.keys[i]:
+                print("key already exists")
+                return
         # if we didn't find a child it must be the last child
         if not found_child:
             res = children[-1].add_key(key)
@@ -298,6 +304,7 @@ btree.add_key(1)
 btree.add_key(2)
 btree.add_key(3)
 btree.add_key(4)
+btree.add_key(5)
 btree.add_key(5)
 pdb.set_trace()
 # btree.add_key(6)
