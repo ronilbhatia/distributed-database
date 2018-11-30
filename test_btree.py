@@ -38,8 +38,9 @@ class TestBTree(unittest.TestCase):
         self.btree.add_key(3)
 
         root = self.btree.root
-        left_child = root.children[0]
-        right_child = root.children[1]
+        children = root.get_children()
+        left_child = children[0]
+        right_child = children[1]
         self.assertEqual(root.keys, [2], 'Does not choose the correct root on split')
         self.assertEqual(left_child.keys, [1], 'Does not create the correct left child on split')
         self.assertEqual(right_child.keys, [3], 'Does not create the correct right child on split')
@@ -52,9 +53,10 @@ class TestBTree(unittest.TestCase):
         self.btree.add_key(5)
 
         root = self.btree.root
-        left_child = root.children[0]
-        middle_child = root.children[1]
-        right_child = root.children[2]
+        children = root.get_children()
+        left_child = children[0]
+        middle_child = children[1]
+        right_child = children[2]
         self.assertEqual(root.keys, [2, 4], 'Does not create the correct root on second split')
         self.assertEqual(left_child.keys, [1], 'Does not create the correct left child on split')
         self.assertEqual(middle_child.keys, [3], 'Does not create the correct middle child on split')
@@ -70,12 +72,17 @@ class TestBTree(unittest.TestCase):
         self.btree.add_key(7)
 
         root = self.btree.root
-        left_child = root.children[0]
-        right_child = root.children[1]
-        left_left_child = left_child.children[0]
-        left_right_child = left_child.children[1]
-        right_left_child = right_child.children[0]
-        right_right_child = right_child.children[1]
+
+        root_children = root.get_children()
+        left_child = root_children[0]
+        right_child = root_children[1]
+
+        left_children = left_child.get_children()
+        right_children = right_child.get_children()
+        left_left_child = left_children[0]
+        left_right_child = left_children[1]
+        right_left_child = right_children[0]
+        right_right_child = right_children[1]
 
         self.assertEqual(root.keys, [4], 'Does not create the correct root on second split')
         self.assertEqual(left_child.keys, [2], 'Does not create the correct left child on split')
@@ -96,17 +103,20 @@ class TestBTree(unittest.TestCase):
         while len(keys) > 0:
             samp = numpy.random.choice(keys)
             self.btree.add_key(samp)
-            # if self.btree.num_keys >= 5:
-            #     pdb.set_trace()
             keys.remove(samp)
 
         root = self.btree.root
-        left_child = root.children[0]
-        right_child = root.children[1]
-        left_left_child = left_child.children[0]
-        left_right_child = left_child.children[1]
-        right_left_child = right_child.children[0]
-        right_right_child = right_child.children[1]
+
+        root_children = root.get_children()
+        left_child = root_children[0]
+        right_child = root_children[1]
+
+        left_children = left_child.get_children()
+        right_children = right_child.get_children()
+        left_left_child = left_children[0]
+        left_right_child = left_children[1]
+        right_left_child = right_children[0]
+        right_right_child = right_children[1]
 
         self.assertEqual(root.keys, [4], 'Does not create the correct root on second split')
         self.assertEqual(left_child.keys, [2], 'Does not create the correct left child on split')

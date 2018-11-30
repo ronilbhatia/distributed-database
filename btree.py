@@ -67,6 +67,9 @@ class Node:
     def is_full(self):
         return self.count() == self.max_keys
 
+    def overflow(self):
+        return self.count() > self.max_keys
+
     def is_empty(self):
         return self.count() == 0
 
@@ -82,69 +85,43 @@ class Node:
     def add_key(self, key):
         # Check if node is leaf - if so attempt to add
         if self.is_leaf():
-            # Check if node is full - if not add key directly on
-            if not self.is_full():
-                is_inserted = False
-                for i in range(self.count()):
-                    if key < self.keys[i]:
-                        self.keys.insert(i, key)
-                        is_inserted = True
-                        break
-                if not is_inserted:
-                    self.keys.append(key)
-            # if the node is full we need to split it
-            else:
-                return self.split(key)
+            return self.add_key_leaf(key)
         else:
-            children = self.get_children()
-            # if the node is not a leaf we must find the appropriate
-            # child to attempt to add the key to
-            for i in range(self.count()):
-                found_child = False
-                if key < self.keys[i]:
-                    found_child = True
-                    res = children[i].add_key(key)
-                    child_idx = i
-                    break
-            # if we didn't find a child it must be the last child
-            if not found_child:
-                res = children[-1].add_key(key)
-                child_idx = len(children) - 1
-            # if we have a res that implies the child had to be split
-            if res:
-                median = res['median']
-                left_id = res['left_id']
-                right_id = res['right_id']
+            return self.add_key_internal(key)
 
-                # We will add the left and right nodes as children of
-                # the node on either side of the median value regardless
-                # of whether the node is full or not and must be split.
-                del self.children_ids[child_idx]
-                self.children_ids.insert(child_idx, left_id)
-                self.children_ids.insert(child_idx + 1, right_id)
-
-                # If the node has space we can add the median value on
-                if not self.is_full():
-                    self.keys.insert(child_idx, median)
-
-                # If the node does not have space we must split it.
-                else:
-                    return self.split(median)
-
-
-    def split(self, key):
-        # Insert key into node in correct spot
+    def add_key_leaf(self, key):
+        is_inserted = False
         for i in range(self.count()):
-            found_spot = False
             if key < self.keys[i]:
-                found_spot = True
                 self.keys.insert(i, key)
+                is_inserted = True
                 break
-
-        # if we didn't find a spot it must go on the end
-        if not found_spot:
+        if not is_inserted:
             self.keys.append(key)
+        # if the node is overflowed we need to split it
+        if self.overflow():
+            return self.split()
 
+    def add_key_internal(self, key):
+        children = self.get_children()
+        # if the node is not a leaf we must find the appropriate
+        # child to attempt to add the key to
+        found_child = False
+        for i in range(self.count()):
+            if key < self.keys[i]:
+                found_child = True
+                res = children[i].add_key(key)
+                child_idx = i
+                break
+        # if we didn't find a child it must be the last child
+        if not found_child:
+            res = children[-1].add_key(key)
+            child_idx = len(children) - 1
+        # if we have a res that implies the child had to be split
+        if res:
+            return self.restructure(res, child_idx)
+
+    def split(self):
         mid_idx = (self.max_keys + 1)//2
 
         # split up the node into left, right, and median
@@ -155,6 +132,23 @@ class Node:
         right.children_ids = self.children_ids[mid_idx+1:]
 
         return {'median': median, 'left_id': left.id, 'right_id': right.id}
+
+    def restructure(self, res, child_idx):
+        median = res['median']
+        left_id = res['left_id']
+        right_id = res['right_id']
+
+        # We will add the left and right nodes as children of
+        # the node on either side of the median value regardless
+        # of whether the node is full or not and must be split.
+        del self.children_ids[child_idx]
+        self.children_ids.insert(child_idx, left_id)
+        self.children_ids.insert(child_idx + 1, right_id)
+        self.keys.insert(child_idx, median)
+
+        # If the node is overflowed we must split it.
+        if self.overflow():
+            return self.split()
 
     def find_left_leaf(self, i):
         # initially set leaf to left child
@@ -258,17 +252,19 @@ class Node:
             right_sibling.keys.remove(closest_key)
             self.keys.remove(rotate_key)
             self.keys.insert(child_idx, closest_key)
+            # TODO:  Make sure to move children_ids appropriately as well
             child.add_key(rotate_key)
 
         # Otherwise, try  to rotate from left sibling
         elif left_sibling is not None and left_sibling.can_give_up_keys():
-                closest_key = left_sibling.keys[-1]
-                rotate_key = self.keys[child_idx-1]
+            closest_key = left_sibling.keys[-1]
+            rotate_key = self.keys[child_idx-1]
 
-                left_sibling.keys.remove(closest_key)
-                self.keys.remove(rotate_key)
-                self.keys.insert(child_idx-1, closest_key)
-                child.add_key(rotate_key)
+            left_sibling.keys.remove(closest_key)
+            self.keys.remove(rotate_key)
+            self.keys.insert(child_idx-1, closest_key)
+            # TODO:  Make sure to move children_ids appropriately as well
+            child.add_key(rotate_key)
 
         # Otherwise, must merge siblings
         else:
@@ -297,12 +293,13 @@ class Node:
             if self.is_deficient():
                 return True
 
-# btree = BTree(4)
-# btree.add_key(1)
-# btree.add_key(2)
-# btree.add_key(3)
-# btree.add_key(4)
-# btree.add_key(5)
+btree = BTree(2)
+btree.add_key(1)
+btree.add_key(2)
+btree.add_key(3)
+btree.add_key(4)
+btree.add_key(5)
+pdb.set_trace()
 # btree.add_key(6)
 # btree.add_key(7)
 # btree.add_key(8)
@@ -316,41 +313,41 @@ class Node:
 # btree.add_key(16)
 # btree.add_key(17)
 # btree.root.remove_key(11)
-btree = BTree(5)
-btree.add_key('A')
-btree.add_key('B')
-btree.add_key('C')
-btree.add_key('D')
-btree.add_key('E')
-btree.add_key('F')
-btree.add_key('G')
-btree.add_key('H')
-btree.add_key('I')
-btree.add_key('J')
-btree.add_key('K')
-btree.add_key('L')
-btree.add_key('M')
-btree.add_key('N')
-btree.add_key('O')
-btree.add_key('P')
-btree.add_key('Q')
-btree.add_key('R')
-btree.add_key('S')
-btree.add_key('T')
-btree.add_key('U')
-btree.add_key('V')
-btree.add_key('W')
-btree.add_key('X')
-btree.add_key('Y')
-btree.add_key('Z')
-btree.remove_key('G')
-btree.remove_key('L')
-btree.remove_key('M')
-btree.remove_key('H')
-btree.remove_key('Z')
-btree.remove_key('U')
-btree.remove_key('N')
-btree.remove_key('O')
-btree.remove_key('F')
-btree.remove_key('J')
+# btree = BTree(5)
+# btree.add_key('A')
+# btree.add_key('B')
+# btree.add_key('C')
+# btree.add_key('D')
+# btree.add_key('E')
+# btree.add_key('F')
+# btree.add_key('G')
+# btree.add_key('H')
+# btree.add_key('I')
+# btree.add_key('J')
+# btree.add_key('K')
+# btree.add_key('L')
+# btree.add_key('M')
+# btree.add_key('N')
+# btree.add_key('O')
+# btree.add_key('P')
+# btree.add_key('Q')
+# btree.add_key('R')
+# btree.add_key('S')
+# btree.add_key('T')
+# btree.add_key('U')
+# btree.add_key('V')
+# btree.add_key('W')
+# btree.add_key('X')
+# btree.add_key('Y')
+# btree.add_key('Z')
+# btree.remove_key('G')
+# btree.remove_key('L')
+# btree.remove_key('M')
+# btree.remove_key('H')
+# btree.remove_key('Z')
+# btree.remove_key('U')
+# btree.remove_key('N')
+# btree.remove_key('O')
+# btree.remove_key('F')
+# btree.remove_key('J')
 pdb.set_trace()
