@@ -26,6 +26,25 @@ class BPlusTree:
         if self.root.is_empty():
             self.root = Node.get_node(self.root.children_ids[0])
 
+    def print_tree(self):
+        curr_node = self.root
+
+        print("Printing tree...\n")
+        print(curr_node.keys)
+
+        i = 0
+        queue = []
+        
+        while not curr_node.is_leaf():
+            children = curr_node.get_children()
+            for _, child in enumerate(children):
+                queue.append(child)
+
+            curr_node = queue[i]
+            i += 1
+
+        for i, node in enumerate(queue):
+            print(node.keys)
 class Node:
     # Class variable to store all nodes
     nodes = {}
@@ -89,51 +108,39 @@ class Node:
             return self.add_key_internal(key)
 
     def add_key_leaf(self, key):
-        is_inserted = False
-        for i, el in enumerate(self.keys):
-            if key < el:
-                self.keys.insert(i, key)
-                is_inserted = True
-                break
-            elif key == el:
-                print("key already exists")
-                return
-        if not is_inserted:
-            self.keys.append(key)
+        key_idx = self.find_idx(key)
+        self.keys.insert(key_idx, key)
+
         # if the node is overflowed we need to split it
         if self.overflow():
             return self.split()
 
     def add_key_internal(self, key):
         children = self.get_children()
+
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
-        child_idx = self.find_child_idx(key)
-        # if we didn't find a child it must be the last child
-        if child_idx is not None:
-            res = children[child_idx].add_key(key)
+        child_idx = self.find_idx(key)
+        res = children[child_idx].add_key(key)
+
         # if we have a res that implies the child had to be split
         if res:
             return self.handle_split(res, child_idx)
 
-    def find_child_idx(self, key):
-        found_child = False
-        child_idx = None
+    def find_idx(self, key):
+        found_idx = False
+        idx = None
 
         for i, curr_key in enumerate(self.keys):
             if key < curr_key:
-                found_child = True
-                # res = children[i].add_key(key)
-                child_idx = i
+                found_idx = True
+                idx = i
                 break
-            elif key == curr_key:
-                print("key already exists")
-                return
 
-        if not found_child:
-            child_idx = self.num_keys()
+        if not found_idx:
+            idx = self.num_keys()
 
-        return child_idx
+        return idx
 
     def split(self):
         mid_idx = self.num_keys()//2
@@ -145,7 +152,12 @@ class Node:
         left_keys = self.keys[0:mid_idx]
         left_children_ids = self.children_ids[0:mid_idx+1]
 
-        right_keys = self.keys[mid_idx+1:]
+        # If node is leaf, we want to keep the median value in the right
+        # node as well, but if it is not then we don't
+        if self.is_leaf():
+            right_keys = self.keys[mid_idx:]
+        else:
+            right_keys = self.keys[mid_idx+1:]
         right_children_ids = self.children_ids[mid_idx+1:]
 
         left = Node(left_keys, max_keys, left_children_ids)
@@ -335,3 +347,29 @@ class Node:
         right_sibling.keys = child.keys + right_sibling.keys
         right_sibling.children_ids = child.children_ids + right_sibling.children_ids
         self.children_ids.remove(child.id)
+
+### build tree
+btree = BPlusTree(4)
+btree.root = Node([13, 24, 30], 4)
+child_one = Node([2, 3, 5, 7], 4)
+child_two = Node([14, 16, 19, 22], 4)
+child_three = Node([24, 27, 29], 4)
+child_four = Node([33, 34, 38, 39], 4)
+btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
+
+# Add key to leaf
+btree.add_key(28)
+
+# Add key causing leaf split, while parent(root) has space
+btree.add_key(20)
+
+# Add key causing leaf split, and parent(root) split -> increase depth of tree
+btree.add_key(8)
+
+# Add some more keys
+btree.add_key(10)
+btree.add_key(37)
+
+btree.print_tree()
+
+pdb.set_trace()

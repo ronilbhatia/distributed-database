@@ -91,51 +91,45 @@ class Node:
             return self.add_key_internal(key)
 
     def add_key_leaf(self, key):
-        is_inserted = False
-        for i, el in enumerate(self.keys):
-            if key < el:
-                self.keys.insert(i, key)
-                is_inserted = True
-                break
-            elif key == el:
-                print("key already exists")
-                return
-        if not is_inserted:
-            self.keys.append(key)
+        key_idx = self.find_idx(key)
+        self.keys.insert(key_idx, key)
+
         # if the node is overflowed we need to split it
         if self.overflow():
             return self.split()
 
     def add_key_internal(self, key):
         children = self.get_children()
+
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
-        child_idx = self.find_child_idx(key)
-        # if we didn't find a child it must be the last child
+        child_idx = self.find_idx(key)
+
+        # child_idx will be None if key already exists in tree
         if child_idx is not None:
             res = children[child_idx].add_key(key)
+
         # if we have a res that implies the child had to be split
         if res:
             return self.handle_split(res, child_idx)
 
-    def find_child_idx(self, key):
-        found_child = False
-        child_idx = None
+    def find_idx(self, key):
+        found_idx = False
+        idx = None
 
         for i, curr_key in enumerate(self.keys):
             if key < curr_key:
-                found_child = True
-                # res = children[i].add_key(key)
-                child_idx = i
+                found_idx = True
+                idx = i
                 break
             elif key == curr_key:
                 print("key already exists")
                 return
 
-        if not found_child:
-            child_idx = self.num_keys()
+        if not found_idx:
+            idx = self.num_keys()
 
-        return child_idx
+        return idx
 
     def split(self):
         mid_idx = self.num_keys()//2
@@ -396,4 +390,4 @@ btree.remove_key('N')
 btree.remove_key('O')
 btree.remove_key('F')
 btree.remove_key('J')
-pdb.set_trace()
+# pdb.set_trace()
