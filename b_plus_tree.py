@@ -1,7 +1,7 @@
 import pdb
 import uuid
 
-class BTree:
+class BPlusTree:
     def __init__(self, max_keys = 2):
         self.root = Node([], max_keys)
         self.num_keys = 0
@@ -47,8 +47,6 @@ class Node:
 
         self.children_ids = children_ids
 
-
-    # see if these methods would be helpful
     def get_child_at_index(self, child_idx):
         if child_idx < 0 or child_idx >= len(self.children_ids):
             return None
@@ -337,63 +335,3 @@ class Node:
         right_sibling.keys = child.keys + right_sibling.keys
         right_sibling.children_ids = child.children_ids + right_sibling.children_ids
         self.children_ids.remove(child.id)
-
-# btree = BTree(2)
-# btree.add_key(1)
-# btree.add_key(2)
-# btree.add_key(3)
-# btree.add_key(4)
-# btree.add_key(5)
-# btree.add_key(5)
-# pdb.set_trace()
-# btree.add_key(6)
-# btree.add_key(7)
-# btree.add_key(8)
-# btree.add_key(9)
-# btree.add_key(10)
-# btree.add_key(11)
-# btree.add_key(12)
-# btree.add_key(13)
-# btree.add_key(14)
-# btree.add_key(15)
-# btree.add_key(16)
-# btree.add_key(17)
-# btree.root.remove_key(11)
-btree = BTree(5)
-btree.add_key('A')
-btree.add_key('B')
-btree.add_key('C')
-btree.add_key('D')
-btree.add_key('E')
-btree.add_key('F')
-btree.add_key('G')
-btree.add_key('H')
-btree.add_key('I')
-btree.add_key('J')
-btree.add_key('K')
-btree.add_key('L')
-btree.add_key('M')
-btree.add_key('N')
-btree.add_key('O')
-btree.add_key('P')
-btree.add_key('Q')
-btree.add_key('R')
-btree.add_key('S')
-btree.add_key('T')
-btree.add_key('U')
-btree.add_key('V')
-btree.add_key('W')
-btree.add_key('X')
-btree.add_key('Y')
-btree.add_key('Z')
-btree.remove_key('G')
-btree.remove_key('L')
-btree.remove_key('M')
-btree.remove_key('H')
-btree.remove_key('Z')
-btree.remove_key('U')
-btree.remove_key('N')
-btree.remove_key('O')
-btree.remove_key('F')
-btree.remove_key('J')
-pdb.set_trace()
