@@ -26,7 +26,7 @@ class BPlusTree:
         if self.root.is_empty():
             self.root = Node.get_node(self.root.children_ids[0])
 
-    def print_tree(self):
+    def print(self):
         curr_node = self.root
 
         print("Printing tree...\n")
@@ -301,20 +301,26 @@ class Node:
     def merge_left(self, child, left_sibling):
         separator = self.keys[-1]
 
-        left_sibling.keys.append(separator)
         self.keys.pop()
+        if not child.is_leaf():
+            left_sibling.keys.append(separator)
+
+        self.children_ids.pop()
+        
         left_sibling.keys = left_sibling.keys + child.keys
         left_sibling.children_ids = left_sibling.children_ids + child.children_ids
-        self.children_ids.pop()
 
     def merge_right(self, child, child_idx, right_sibling):
         separator = self.keys[child_idx]
 
-        right_sibling.keys.insert(0, separator)
         self.keys.remove(separator)
+        if not child.is_leaf():
+            right_sibling.keys.insert(0, separator)
+
+        self.children_ids.remove(child.id)
+
         right_sibling.keys = child.keys + right_sibling.keys
         right_sibling.children_ids = child.children_ids + right_sibling.children_ids
-        self.children_ids.remove(child.id)
 
 ### build tree
 btree = BPlusTree(4)
@@ -339,7 +345,7 @@ btree.add_key(8)
 btree.add_key(10)
 btree.add_key(37)
 
-btree.print_tree()
+btree.print()
 
 ### Test removing keys
 # Remove key from leaf
@@ -352,5 +358,20 @@ btree.remove_key(33)
 # Remove key from leaf, causing rotation left (from right sibling)
 btree.remove_key(3)
 
-btree.print_tree()
+# Remove key from leaf, causing merge left (from right sibling)
+btree.remove_key(37)
+
+# Setup for next test
+btree.add_key(37)
+btree.add_key(39)
+btree.remove_key(24)
+
+# Remove key from leaf, causing merge right (from left sibling)
+btree.remove_key(27)
+
+btree.remove_key(16)
+
+btree.remove_key(8)
+
+btree.print()
 pdb.set_trace()
