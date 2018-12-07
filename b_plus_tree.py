@@ -34,7 +34,7 @@ class BPlusTree:
 
         i = 0
         queue = []
-        
+
         while not curr_node.is_leaf():
             children = curr_node.get_children()
             for _, child in enumerate(children):
@@ -45,6 +45,8 @@ class BPlusTree:
 
         for i, node in enumerate(queue):
             print(node.keys)
+
+        print("-----------------------")
 class Node:
     # Class variable to store all nodes
     nodes = {}
@@ -224,50 +226,19 @@ class Node:
     def remove_key_internal(self, key):
         children = self.get_children()
         found_child = False
-        found_key = False
-        # if the node is not a leaf we attempt to find the key in
-        # the node itself or find the appropriate child where the
-        # key should be if it exists in the tree
-        for i in range(self.num_keys()):
-            # Check if key is actually contained in node
-            if key == self.keys[i]:
-                # logic for deleting key in internal node
-                found_key = True
-                self.keys.remove(key)
-
-                left_leaf = self.find_left_leaf(i)
-                right_leaf = self.find_right_leaf(i)
-
-                # Take from left leaf if it can give up keys
-                if left_leaf.can_give_up_keys():
-                    new_separator = left_leaf.keys[-1]
-                    self.keys.insert(i, new_separator)
-                    child_idx = i
-
-                    # Even though we've found the key in the leaf,
-                    # use our method on the current node we are on
-                    # incase recursive rebalancing is necessary
-                    res = children[i].remove_key(new_separator)
-
-                # Otherwise, take from right leaf
-                else:
-                    new_separator = right_leaf.keys[0]
-                    self.keys.insert(i, new_separator)
-                    child_idx = i+1
-                    res = children[i+1].remove_key(new_separator)
-                break
-
-            # If we didn't find the key yet, and it's less than the
-            # current element, then it should live in the subtree of
-            # this child
-            elif key < self.keys[i]:
+        # if the node is not a leaf we find the appropriate child where
+        # the key should be if it exists in the tree
+        for i, curr_key in enumerate(self.keys):
+            # If the key is less than the current element then it must
+            # live in the subtree of the corresponding child
+            if key < curr_key:
                 found_child = True
                 res = children[i].remove_key(key)
                 child_idx = i
                 break
 
         # If we still didn't find it, it's in the last child's subtree
-        if not found_child and not found_key:
+        if not found_child:
             res = children[-1].remove_key(key)
             child_idx = len(children) - 1
 
@@ -305,12 +276,11 @@ class Node:
                 return True
 
     def rotate_left(self, child, child_idx, right_sibling):
-        closest_key = right_sibling.keys[0]
-        rotate_key = self.keys[child_idx]
+        rotate_key = right_sibling.keys[0]
+        new_separator = right_sibling.keys[1]
 
-        right_sibling.keys.remove(closest_key)
-        self.keys.remove(rotate_key)
-        self.keys.insert(child_idx, closest_key)
+        right_sibling.keys.remove(rotate_key)
+        self.keys[child_idx] = new_separator
         if not right_sibling.is_leaf():
             new_child_id = right_sibling.children_ids[0]
             self.children_ids.append(new_child_id)
@@ -318,12 +288,10 @@ class Node:
         child.add_key(rotate_key)
 
     def rotate_right(self, child, child_idx, left_sibling):
-        closest_key = left_sibling.keys[-1]
-        rotate_key = self.keys[child_idx-1]
+        rotate_key = left_sibling.keys[-1]
+        self.keys[child_idx-1] = rotate_key
 
-        left_sibling.keys.remove(closest_key)
-        self.keys.remove(rotate_key)
-        self.keys.insert(child_idx-1, closest_key)
+        left_sibling.keys.remove(rotate_key)
         if not left_sibling.is_leaf():
             new_child_id = left_sibling.children_ids[-1]
             self.children_ids.insert(0, new_child_id)
@@ -357,6 +325,7 @@ child_three = Node([24, 27, 29], 4)
 child_four = Node([33, 34, 38, 39], 4)
 btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
 
+### Test adding keys
 # Add key to leaf
 btree.add_key(28)
 
@@ -372,4 +341,16 @@ btree.add_key(37)
 
 btree.print_tree()
 
+### Test removing keys
+# Remove key from leaf
+btree.remove_key(39)
+btree.remove_key(28)
+
+# Remove key from leaf, causing rotation right (from left sibling)
+btree.remove_key(33)
+
+# Remove key from leaf, causing rotation left (from right sibling)
+btree.remove_key(3)
+
+btree.print_tree()
 pdb.set_trace()

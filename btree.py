@@ -212,9 +212,9 @@ class Node:
         # if the node is not a leaf we attempt to find the key in
         # the node itself or find the appropriate child where the
         # key should be if it exists in the tree
-        for i in range(self.num_keys()):
+        for i, curr_key in enumerate(self.keys):
             # Check if key is actually contained in node
-            if key == self.keys[i]:
+            if key == curr_key:
                 # logic for deleting key in internal node
                 found_key = True
                 self.keys.remove(key)
@@ -244,7 +244,7 @@ class Node:
             # If we didn't find the key yet, and it's less than the
             # current element, then it should live in the subtree of
             # this child
-            elif key < self.keys[i]:
+            elif key < curr_key:
                 found_child = True
                 res = children[i].remove_key(key)
                 child_idx = i
@@ -390,4 +390,4 @@ btree.remove_key('N')
 btree.remove_key('O')
 btree.remove_key('F')
 btree.remove_key('J')
-# pdb.set_trace()
+pdb.set_trace()
