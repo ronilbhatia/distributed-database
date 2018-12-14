@@ -26,6 +26,28 @@ class BTree:
         if self.root.is_empty():
             self.root = Node.get_node(self.root.children_ids[0])
 
+    def print(self):
+        curr_node = self.root
+
+        print("Printing tree...\n")
+        print(curr_node.keys)
+
+        i = 0
+        queue = []
+
+        while not curr_node.is_leaf():
+            children = curr_node.get_children()
+            for _, child in enumerate(children):
+                queue.append(child)
+
+            curr_node = queue[i]
+            i += 1
+
+        for i, node in enumerate(queue):
+            print(node.keys)
+
+        print("-----------------------")
+
 class Node:
     # Class variable to store all nodes
     nodes = {}
@@ -298,7 +320,8 @@ class Node:
         if not right_sibling.is_leaf():
             new_child_id = right_sibling.children_ids[0]
             self.children_ids.append(new_child_id)
-            right_sibling.children_ids.remove(new_child_id)
+            del(right_sibling.children_ids[0])
+
         child.add_key(rotate_key)
 
     def rotate_right(self, child, child_idx, left_sibling):
@@ -311,7 +334,7 @@ class Node:
         if not left_sibling.is_leaf():
             new_child_id = left_sibling.children_ids[-1]
             self.children_ids.insert(0, new_child_id)
-            right_sibling.children_ids.remove(new_child_id)
+            del(left_sibling.children_ids[-1])
         child.add_key(rotate_key)
 
     def merge_left(self, child, left_sibling):

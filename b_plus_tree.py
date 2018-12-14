@@ -1,5 +1,6 @@
 import pdb
 import uuid
+from lock import ReadWriteLock
 
 class BPlusTree:
     def __init__(self, max_keys = 2):
@@ -14,6 +15,8 @@ class BPlusTree:
         if res:
             self.root.keys = [res['median']]
             self.root.children_ids = [res['left_id'], res['right_id']]
+            print("Releasing lock on new root with keys ", self.root.keys)
+            self.root.lock.release_write()
             return res
 
     def remove_key(self, key):
@@ -47,6 +50,7 @@ class BPlusTree:
             print(node.keys)
 
         print("-----------------------")
+
 class Node:
     # Class variable to store all nodes
     nodes = {}
@@ -60,6 +64,7 @@ class Node:
         self.max_keys = max_keys
         self.min_keys = max_keys // 2
         self.id = uuid.uuid4()
+        self.lock = ReadWriteLock()
 
         # Add node to hash map, ensuring it has a unique id
         while Node.get_node(self.id) is not None:
@@ -87,6 +92,9 @@ class Node:
     def is_full(self):
         return self.num_keys() == self.max_keys
 
+    def is_stable(self):
+        return self.num_keys() < self.max_keys
+
     def overflow(self):
         return self.num_keys() > self.max_keys
 
@@ -102,12 +110,22 @@ class Node:
     def is_deficient(self):
         return self.num_keys() < self.min_keys
 
-    def add_key(self, key):
-        # Check if node is leaf - if so attempt to add
+    def add_key(self, key, parent = None):
+        print("Adding key ", key)
+        # Acquire write lock immediately
+        print("Acquiring lock for node with keys ", self.keys)
+        self.lock.acquire_write()
+
+        # If this node is stable, then release lock on parent
+        if parent is not None and self.is_stable():
+            print("Release lock for node with keys ", parent.keys)
+            parent.lock.release_write()
+
         if self.is_leaf():
             return self.add_key_leaf(key)
         else:
             return self.add_key_internal(key)
+
 
     def add_key_leaf(self, key):
         key_idx = self.find_idx(key)
@@ -115,7 +133,13 @@ class Node:
 
         # if the node is overflowed we need to split it
         if self.overflow():
-            return self.split()
+            split_info = self.split()
+            # print("Releasing lock for leaf with keys ", self.keys)
+            # self.lock.release_write()
+            return split_info
+        else:
+            print("Releasing lock for leaf with keys ", self.keys)
+            self.lock.release_write()
 
     def add_key_internal(self, key):
         children = self.get_children()
@@ -123,11 +147,12 @@ class Node:
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
         child_idx = self.find_idx(key)
-        res = children[child_idx].add_key(key)
+        split_info = children[child_idx].add_key(key, self)
 
-        # if we have a res that implies the child had to be split
-        if res:
-            return self.handle_split(res, child_idx)
+        # if we have split_info that implies the child had to be split
+        if split_info:
+            return self.handle_split(split_info, child_idx)
+
 
     def find_idx(self, key):
         found_idx = False
@@ -165,6 +190,9 @@ class Node:
         left = Node(left_keys, max_keys, left_children_ids)
         right = Node(right_keys, max_keys, right_children_ids)
 
+        # release lock on orphaned leaf node
+        self.release_write()
+
         return {'median': median, 'left_id': left.id, 'right_id': right.id}
 
     def handle_split(self, split_info, child_idx):
@@ -182,28 +210,9 @@ class Node:
         # If the node is overflowed we must split it.
         if self.overflow():
             return self.split()
-
-    def find_left_leaf(self, i):
-        # initially set leaf to left child
-        curr_node = self.get_child_at_index(i)
-
-        # continue to reassign leaf to right-most child until the node
-        # has no children (i.e. it is a leaf)
-        while not curr_node.is_leaf() > 0:
-            curr_node = Node.get_node(curr_node.children_ids[-1])
-
-        return curr_node
-
-    def find_right_leaf(self, i):
-        # initially set leaf to right child
-        curr_node = self.get_child_at_index(i+1)
-
-        # continue to reassign leaf to left-most child until the node
-        # has no children (i.e. it is a leaf)
-        while len(curr_node.children_ids) > 0:
-            curr_node = Node.get_node(curr_node.children_ids[0])
-
-        return curr_node
+        else:
+            print("Releasing lock on node with keys ", self.keys)
+            self.lock.release_write()
 
     def remove_key(self, key):
         # Check if node is leaf - attempt to remove key directly
@@ -225,22 +234,9 @@ class Node:
 
     def remove_key_internal(self, key):
         children = self.get_children()
-        found_child = False
-        # if the node is not a leaf we find the appropriate child where
-        # the key should be if it exists in the tree
-        for i, curr_key in enumerate(self.keys):
-            # If the key is less than the current element then it must
-            # live in the subtree of the corresponding child
-            if key < curr_key:
-                found_child = True
-                res = children[i].remove_key(key)
-                child_idx = i
-                break
+        child_idx = self.find_idx(key)
 
-        # If we still didn't find it, it's in the last child's subtree
-        if not found_child:
-            res = children[-1].remove_key(key)
-            child_idx = len(children) - 1
+        res = children[child_idx].remove_key(key)
 
         # having a res implies underflow occurred when removing key
         # from child and we must restructure the tree
@@ -284,7 +280,8 @@ class Node:
         if not right_sibling.is_leaf():
             new_child_id = right_sibling.children_ids[0]
             self.children_ids.append(new_child_id)
-            right_sibling.children_ids.remove(new_child_id)
+            del(right_sibling.children_ids[0])
+
         child.add_key(rotate_key)
 
     def rotate_right(self, child, child_idx, left_sibling):
@@ -295,10 +292,13 @@ class Node:
         if not left_sibling.is_leaf():
             new_child_id = left_sibling.children_ids[-1]
             self.children_ids.insert(0, new_child_id)
-            right_sibling.children_ids.remove(new_child_id)
+            del(right_sibling.children_ids[-1])
+
         child.add_key(rotate_key)
 
     def merge_left(self, child, left_sibling):
+        # TODO: Change method to be dynamic and not rely on node being
+        # last child. Could even leverage merge_right method instead.
         separator = self.keys[-1]
 
         self.keys.pop()
@@ -306,7 +306,7 @@ class Node:
             left_sibling.keys.append(separator)
 
         self.children_ids.pop()
-        
+
         left_sibling.keys = left_sibling.keys + child.keys
         left_sibling.children_ids = left_sibling.children_ids + child.children_ids
 
@@ -334,9 +334,9 @@ btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_fou
 ### Test adding keys
 # Add key to leaf
 btree.add_key(28)
-
 # Add key causing leaf split, while parent(root) has space
 btree.add_key(20)
+btree.print()
 
 # Add key causing leaf split, and parent(root) split -> increase depth of tree
 btree.add_key(8)
@@ -345,7 +345,7 @@ btree.add_key(8)
 btree.add_key(10)
 btree.add_key(37)
 
-btree.print()
+# btree.print()
 
 ### Test removing keys
 # Remove key from leaf
@@ -369,9 +369,12 @@ btree.remove_key(24)
 # Remove key from leaf, causing merge right (from left sibling)
 btree.remove_key(27)
 
+# Remove additional key to setup next test
 btree.remove_key(16)
 
+# Remove key causing rebalance propagating to the root, emptying it, and
+# creating a new root
 btree.remove_key(8)
 
 btree.print()
-pdb.set_trace()
+# pdb.set_trace()
