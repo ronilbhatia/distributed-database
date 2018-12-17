@@ -9,12 +9,19 @@ class BPlusTree:
         self.min_keys = max_keys // 2
 
     def add_key(self, key):
+        print("Adding key ", key)
         self.num_keys += 1
-        res = self.root.add_key(key)
+
+        print("Acquiring lock on root with keys ", self.root.keys)
+        self.root.lock.acquire_write()
+        lock_path = [self.root]
+
+        res = self.root.add_key(key, lock_path)
 
         if res:
             self.root.keys = [res['median']]
             self.root.children_ids = [res['left_id'], res['right_id']]
+            
             print("Releasing lock on new root with keys ", self.root.keys)
             self.root.lock.release_write()
             return res
@@ -110,44 +117,41 @@ class Node:
     def is_deficient(self):
         return self.num_keys() < self.min_keys
 
-    def add_key(self, key, parent = None):
-        print("Adding key ", key)
-        # Acquire write lock immediately
-        print("Acquiring lock for node with keys ", self.keys)
-        self.lock.acquire_write()
-
-        # If this node is stable, then release lock on parent
-        if parent is not None and self.is_stable():
-            print("Release lock for node with keys ", parent.keys)
-            parent.lock.release_write()
-
+    def add_key(self, key, lock_path = []):
         if self.is_leaf():
-            return self.add_key_leaf(key)
+            return self.add_key_leaf(key, lock_path)
         else:
-            return self.add_key_internal(key)
+            return self.add_key_internal(key, lock_path)
 
 
-    def add_key_leaf(self, key):
+    def add_key_leaf(self, key, lock_path):
         key_idx = self.find_idx(key)
         self.keys.insert(key_idx, key)
 
         # if the node is overflowed we need to split it
         if self.overflow():
-            split_info = self.split()
-            # print("Releasing lock for leaf with keys ", self.keys)
-            # self.lock.release_write()
-            return split_info
+            return self.split()
         else:
             print("Releasing lock for leaf with keys ", self.keys)
             self.lock.release_write()
 
-    def add_key_internal(self, key):
+    def add_key_internal(self, key, lock_path):
         children = self.get_children()
 
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
         child_idx = self.find_idx(key)
-        split_info = children[child_idx].add_key(key, self)
+        child = children[child_idx]
+        child.lock.acquire_write()
+
+        if child.is_stable():
+            for idx, node in enumerate(lock_path):
+                node.lock.release_write()
+
+            lock_path = []
+
+        lock_path.append(child)
+        split_info = children[child_idx].add_key(key, lock_path)
 
         # if we have split_info that implies the child had to be split
         if split_info:
@@ -190,15 +194,13 @@ class Node:
         left = Node(left_keys, max_keys, left_children_ids)
         right = Node(right_keys, max_keys, right_children_ids)
 
-        # release lock on orphaned leaf node
-        self.release_write()
-
-        return {'median': median, 'left_id': left.id, 'right_id': right.id}
+        return {'median': median, 'left_id': left.id, 'right_id': right.id, 'orphan': self}
 
     def handle_split(self, split_info, child_idx):
         median = split_info['median']
         left_id = split_info['left_id']
         right_id = split_info['right_id']
+        orphan = split_info['orphan']
 
         # We will add the left and right nodes as children of
         # the node on either side of the median value regardless
@@ -206,6 +208,9 @@ class Node:
         self.children_ids[child_idx] = left_id
         self.children_ids.insert(child_idx + 1, right_id)
         self.keys.insert(child_idx, median)
+
+        # Release lock on orphaned node
+        orphan.lock.release_write()
 
         # If the node is overflowed we must split it.
         if self.overflow():
@@ -282,6 +287,7 @@ class Node:
             self.children_ids.append(new_child_id)
             del(right_sibling.children_ids[0])
 
+        child.lock.acquire_write()
         child.add_key(rotate_key)
 
     def rotate_right(self, child, child_idx, left_sibling):
@@ -294,6 +300,7 @@ class Node:
             self.children_ids.insert(0, new_child_id)
             del(right_sibling.children_ids[-1])
 
+        child.lock.acquire_write()
         child.add_key(rotate_key)
 
     def merge_left(self, child, left_sibling):
