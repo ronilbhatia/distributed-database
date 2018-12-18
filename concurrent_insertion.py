@@ -1,7 +1,7 @@
 import time
 from threading import Thread, Lock
 from random import *
-from b_plus_tree import BPlusTree
+from b_plus_tree import *
 import pdb
 
 class ReadWriteLock(object):
@@ -43,7 +43,7 @@ class ReadWriteLock(object):
     def release_write(self):
         self.__exclude.release()
 
-btree = BPlusTree(4)
+btree = core.BPlusTree(4)
 
 class Thread1(Thread):
     def run(self):
