@@ -14,8 +14,8 @@ class BPlusTree:
         print("Adding key ", key)
         self.num_keys += 1
 
-        print("Acquiring lock on root with keys ", self.root.keys)
-        self.root.lock.acquire_write()
+        print("Acquiring read lock on root with keys ", self.root.keys)
+        self.root.lock.acquire_read()
         lock_path = [self.root]
 
         res = self.root.add_key(key, lock_path)
@@ -24,7 +24,7 @@ class BPlusTree:
             self.root.keys = [res['median']]
             self.root.children_ids = [res['left_id'], res['right_id']]
 
-            print("Releasing lock on new root with keys ", self.root.keys)
+            print("Releasing write lock on new root with keys ", self.root.keys)
             self.root.lock.release_write()
             return res
 
@@ -143,6 +143,7 @@ child_three = Node([24, 27, 29], 4)
 child_four = Node([33, 34, 38, 39], 4)
 btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
 
+btree.print()
 ### Test adding keys
 # Add key to leaf
 btree.add_key(28)
@@ -190,3 +191,4 @@ btree.remove_key(8)
 
 btree.print()
 # pdb.set_trace()
+print("done")
