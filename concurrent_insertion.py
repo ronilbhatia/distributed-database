@@ -5,6 +5,12 @@ from b_plus_tree import *
 import pdb
 
 btree = core.BPlusTree(4)
+# btree.root = core.Node([13, 24, 30], 4)
+# child_one = core.Node([2, 3, 5, 7], 4)
+# child_two = core.Node([14, 16, 19, 22], 4)
+# child_three = core.Node([24, 27, 29], 4)
+# child_four = core.Node([33, 34, 38, 39], 4)
+# btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
 
 class Thread1(Thread):
     def run(self):
