@@ -1,6 +1,22 @@
 import pdb
 
 class Insertion:
+    def find_parent_of_deepest_stable_ancestor(self, key):
+        curr_node = self
+        parent = self
+        deepest_stable_ancestor = self
+
+        while not curr_node.is_leaf():
+            child_idx = curr_node.find_idx(key)
+            child_id = curr_node.children_ids[child_id]
+            child = self.__class__.get_node(child_id)
+
+            if child.is_stable():
+                parent = curr_node
+                deepest_stable_ancestor = child
+
+            curr_node = child
+
     def add_key(self, key, lock_path = []):
         if self.is_leaf():
             return self.add_key_leaf(key, lock_path)

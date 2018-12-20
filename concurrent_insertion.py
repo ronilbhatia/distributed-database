@@ -1,10 +1,10 @@
 import time
-from threading import Thread, Lock
+from threading import Thread
 from random import *
-from b_plus_tree import *
+from btree import *
 import pdb
 
-btree = core.BPlusTree(4)
+btree = core.BTree(4)
 # btree.root = core.Node([13, 24, 30], 4)
 # child_one = core.Node([2, 3, 5, 7], 4)
 # child_two = core.Node([14, 16, 19, 22], 4)

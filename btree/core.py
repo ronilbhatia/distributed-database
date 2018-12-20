@@ -1,10 +1,10 @@
 import pdb
 import uuid
-from lock import ReadWriteLock
-from b_plus_tree.insertion import Insertion
-from b_plus_tree.deletion import Deletion
+from locking.lock import ReadWriteLock
+from btree.insertion import Insertion
+from btree.deletion import Deletion
 
-class BPlusTree:
+class BTree:
     def __init__(self, max_keys = 2):
         self.root = Node([], max_keys)
         self.num_keys = 0
@@ -135,7 +135,7 @@ class Node(Insertion, Deletion):
         return idx
 
 ### build tree
-btree = BPlusTree(4)
+btree = BTree(4)
 btree.root = Node([13, 24, 30], 4)
 child_one = Node([2, 3, 5, 7], 4)
 child_two = Node([14, 16, 19, 22], 4)
