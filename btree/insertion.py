@@ -31,27 +31,12 @@ class Insertion:
         # up lock path through first stable node or root if there is
         # no node is stable
         if not self.is_stable():
-            if len(lock_path) == 2:
-                parent = lock_path[0]
-                print("Releasing read lock and acquiring write lock on node with keys ", parent.keys)
-                parent.lock.release_read()
-                parent.lock.acquire_write()
-            elif len(lock_path) > 2:
-                if lock_path[1].is_stable():
-                    for idx, node in enumerate(lock_path[1:-1]):
-                        print("Releasing read lock and acquiring write lock on node with keys ", node.keys)
-                        node.lock.release_read()
-                        node.lock.acquire_write()
-                else:
-                    for idx, node in enumerate(lock_path[0:-1]):
-                        print("Releasing read lock and acquiring write lock on node with keys ", node.keys)
-                        node.lock.release_read()
-                        node.lock.acquire_write()
+            lock_path.acquire_writes()
+        else:
+            print("Releasing read lock and acquiring write lock on leaf with keys ", self.keys)
+            self.release_read()
+            self.acquire_write()
 
-        # Acquire write lock on leaf node regardless
-        print("Releasing read lock and acquiring write lock on leaf with keys ", self.keys)
-        self.lock.release_read()
-        self.lock.acquire_write()
         self.keys.insert(key_idx, key)
 
         # if the node is overflowed we need to split it
@@ -59,11 +44,11 @@ class Insertion:
             return self.split()
         else:
             print("Releasing write lock for leaf with keys ", self.keys)
-            self.lock.release_write()
+            self.release_write()
             # Release read lock on parent (only two nodes in lock path
             # are leaf and its parent)
             print("Releasing read lock for node with keys", lock_path[0].keys)
-            lock_path[0].lock.release_read()
+            lock_path[0].release_read()
 
     def add_key_internal(self, key, lock_path):
         children = self.get_children()
@@ -80,7 +65,7 @@ class Insertion:
         if child.is_stable():
             for idx, node in enumerate(lock_path[0:-1]):
                 print("Releasing read lock on node with keys ", node.keys)
-                node.lock.release_read()
+                node.release_read()
 
             lock_path = [lock_path[-1]]
 
@@ -129,7 +114,7 @@ class Insertion:
 
         # Release lock on orphaned node
         print("Releasing write lock on orphaned node with keys ", orphan.keys)
-        orphan.lock.release_write()
+        orphan.release_write()
 
         # If the node is overflowed we must split it.
         if self.overflow():
@@ -137,7 +122,7 @@ class Insertion:
         else:
             print("Releasing write lock on node with keys ", self.keys)
             print(self.keys, lock_path, self.lock.locked())
-            self.lock.release_write()
+            self.release_write()
 
             # If node doesn't overflow it means it was stable, and everything
             # before it is read-locked. The last two nodes in the lock path
@@ -145,4 +130,4 @@ class Insertion:
             # not release read locks on them.
             for idx, node in enumerate(lock_path[0:-2]):
                 print("Releasing read lock on node with keys ", node.keys)
-                node.lock.release_read()
+                node.release_read()

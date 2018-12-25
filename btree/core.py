@@ -1,8 +1,10 @@
 import pdb
 import uuid
 from locking.lock import ReadWriteLock
+from locking.lock_path import LockPath
 from btree.insertion import Insertion
 from btree.deletion import Deletion
+
 
 class BTree:
     def __init__(self, max_keys = 2):
@@ -15,8 +17,9 @@ class BTree:
         self.num_keys += 1
 
         print("Acquiring read lock on root with keys ", self.root.keys)
-        self.root.lock.acquire_read()
-        lock_path = [self.root]
+        self.root.acquire_read()
+        lock_path = LockPath()
+        lock_path.add_read(self.root)
 
         res = self.root.add_key(key, lock_path)
 
@@ -25,7 +28,7 @@ class BTree:
             self.root.children_ids = [res['left_id'], res['right_id']]
 
             print("Releasing write lock on new root with keys ", self.root.keys)
-            self.root.lock.release_write()
+            self.root.release_write()
             return res
 
     def remove_key(self, key):
@@ -118,6 +121,18 @@ class Node(Insertion, Deletion):
 
     def is_deficient(self):
         return self.num_keys() < self.min_keys
+
+    def acquire_read(self):
+        self.lock.acquire_read()
+
+    def acquire_write(self):
+        self.lock.acquire_write()
+
+    def release_read(self):
+        self.lock.release_read()
+
+    def release_write(self):
+        self.lock.release_write()
 
     def find_idx(self, key):
         found_idx = False
