@@ -1,6 +1,7 @@
 import pdb
 import uuid
 from locking.lock import ReadWriteLock
+from locking.lock_path import LockPath
 from btree.insertion import Insertion
 from btree.deletion import Deletion
 
@@ -15,12 +16,19 @@ class BTree:
         print("Adding key ", key)
         self.num_keys += 1
 
-        res = self.root.add_key(key)
+        print("Acquiring read lock on root with keys ", self.root.keys)
+        self.root.acquire_read()
+        lock_path = LockPath()
+        lock_path.add_read(self.root)
+
+        res = self.root.add_key(key, lock_path)
 
         if res:
             self.root.keys = [res['median']]
             self.root.children_ids = [res['left_id'], res['right_id']]
 
+            print("Releasing write lock on new root with keys ", self.root.keys)
+            self.root.release_write()
             return res
 
     def remove_key(self, key):

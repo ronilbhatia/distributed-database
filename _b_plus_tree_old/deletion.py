@@ -69,7 +69,11 @@ class Deletion:
             self.children_ids.append(new_child_id)
             del(right_sibling.children_ids[0])
 
-        child.add_key(rotate_key)
+        self.lock.acquire_read()
+        child.lock.acquire_read()
+        lock_path = [self, child]
+        # pdb.set_trace()
+        child.add_key(rotate_key, lock_path)
 
     def rotate_right(self, child, child_idx, left_sibling):
         rotate_key = left_sibling.keys[-1]
@@ -81,7 +85,11 @@ class Deletion:
             self.children_ids.insert(0, new_child_id)
             del(right_sibling.children_ids[-1])
 
-        child.add_key(rotate_key)
+        self.lock.acquire_read()
+        child.lock.acquire_read()
+        lock_path = [self, child]
+        # pdb.set_trace()
+        child.add_key(rotate_key, lock_path)
 
     def merge_left(self, child, left_sibling):
         # TODO: Change method to be dynamic and not rely on node being
