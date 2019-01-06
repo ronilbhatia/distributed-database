@@ -18,8 +18,12 @@ class BTree:
         res = self.root.add_key(key)
 
         if res:
-            self.root.keys = [res['median']]
-            self.root.children_ids = [res['left_id'], res['right_id']]
+            # Must create new root
+            keys = [res['median']]
+            max_keys = self.root.max_keys
+            max_key = Node.get_node(res['right_id']).max_key
+            children_ids = [res['left_id'], res['right_id']]
+            self.root = Node(keys, max_keys, max_key, children_ids)
 
             return res
 
@@ -63,10 +67,11 @@ class Node(Insertion, Deletion):
     def get_node(self, id):
         return self.nodes.get(id)
 
-    def __init__(self, keys = [], max_keys = 2, children_ids = []):
+    def __init__(self, keys = [], max_keys = 2, max_key = 0, children_ids = []):
         self.keys = keys
         self.max_keys = max_keys
         self.min_keys = max_keys // 2
+        self.max_key = max_key
         self.id = uuid.uuid4()
         self.lock = ReadWriteLock()
 
@@ -143,11 +148,11 @@ class Node(Insertion, Deletion):
 
 ### build tree
 btree = BTree(4)
-btree.root = Node([13, 24, 30], 4)
-child_one = Node([2, 3, 5, 7], 4)
-child_two = Node([14, 16, 19, 22], 4)
-child_three = Node([24, 27, 29], 4)
-child_four = Node([33, 34, 38, 39], 4)
+btree.root = Node([13, 24, 30], 4, 39)
+child_one = Node([2, 3, 5, 7], 4, 13)
+child_two = Node([14, 16, 19, 22], 4, 24)
+child_three = Node([24, 27, 29], 4, 30)
+child_four = Node([33, 34, 38, 39], 4, 39)
 btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
 
 btree.print()
@@ -162,6 +167,7 @@ btree.print()
 btree.add_key(8)
 
 # Add some more keys
+pdb.set_trace()
 btree.add_key(10)
 btree.add_key(37)
 
