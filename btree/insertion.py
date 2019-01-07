@@ -4,19 +4,30 @@ class Insertion:
     def add_key(self, key):
         if self.is_leaf():
             return self.add_key_leaf(key)
+        # elif self.is_root:
+        #     return self.add_key_root(key)
         else:
             return self.add_key_internal(key)
 
+    def add_key_root(self, key):
+        pass
+
     def add_key_leaf(self, key):
+        self.acquire_write()
+
+        if hasattr(self, 'link') and key > self.max_key:
+            self.release_write()
+            new_node = self.scan_right_for_write_guard(key)
+            return new_node.add_key_leaf(key)
+
         key_idx = self.find_idx(key)
         self.keys.insert(key_idx, key)
-
-        if key > self.max_key:
-            self.max_key = key
 
         # if the node is overflowed we need to split it
         if self.overflow():
             return self.split()
+        else:
+            self.release_write()
 
     def add_key_internal(self, key):
         children = self.get_children()
@@ -30,6 +41,14 @@ class Insertion:
 
         # if we have split_info that implies the child had to be split
         if split_info:
+            self.acquire_write()
+
+            if hasattr(self, 'link') and key > self.max_key:
+                self.release_write()
+                new_node = self.scan_right_for_write_guard(key)
+                new_node.acquire_write()
+                return new_node.handle_split(split_info, child_idx)
+                
             return self.handle_split(split_info, child_idx)
 
     def split(self):
@@ -57,10 +76,18 @@ class Insertion:
         self.children_ids = left_children_ids
 
         right = self.__class__(right_keys, max_keys, max_key, right_children_ids)
+
+        # If this node previously had a link, the right node now has this link,
+        # and this node acquires a link to the right node
+        if hasattr(self, 'link'):
+            right.link = self.link
         self.link = right.id
 
         # left child's (self's) max key is the separator value
         self.max_key = median
+
+        # release lock
+        self.release_write()
 
         return {'median': median, 'left_id': self.id, 'right_id': right.id}
 
@@ -76,12 +103,15 @@ class Insertion:
         self.children_ids.insert(child_idx + 1, right_id)
         self.keys.insert(child_idx, median)
 
-        # Reassign max_key if we split last child, as max value of
-        # subtree has potentially changed
-        if child_idx + 1 == len(self.children_ids) - 1:
-            right_node = self.__class__.get_node(right_id)
-            self.max_key = right_node.max_key
+        right_node = self.__class__.get_node(right_id)
+        # Assign max_key of right node, but only if the right node has a link
+        if self.is_last_child(right_id) and hasattr(right_node, 'link'):
+            right_node.max_key = self.max_key
+        elif hasattr(right_node, 'link'):
+            right_node.max_key = self.keys[child_idx+1]
 
         # If the node is overflowed we must split it.
         if self.overflow():
             return self.split()
+        else:
+            self.release_write()

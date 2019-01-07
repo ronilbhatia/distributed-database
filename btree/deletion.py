@@ -79,7 +79,7 @@ class Deletion:
         if not left_sibling.is_leaf():
             new_child_id = left_sibling.children_ids[-1]
             self.children_ids.insert(0, new_child_id)
-            del(right_sibling.children_ids[-1])
+            del(left_sibling.children_ids[-1])
 
         child.add_key(rotate_key)
 

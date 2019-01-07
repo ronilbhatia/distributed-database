@@ -15,13 +15,13 @@ btree = core.BTree(4)
 class Thread1(Thread):
     def run(self):
         global btree
-        for i in range(1000):
+        for i in range(10):
             btree.add_key(i)
 
 class Thread2(Thread):
     def run(self):
         global btree
-        for i in range(1000):
+        for i in range(10):
             btree.add_key(i+1000)
 
 class Thread3(Thread):
