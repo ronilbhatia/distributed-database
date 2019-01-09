@@ -8,15 +8,17 @@ from btree.deletion import Deletion
 class BTree:
     def __init__(self, max_keys = 2):
         # Create root node, and set up root identifier
-        initial_root = Node([], max_keys)
-        initial_root.is_root = True
-        self.root_id = initial_root.id
-        
+        self.set_root(max_keys)
         self.num_keys = 0
         self.min_keys = max_keys // 2
 
     def get_root(self):
         return Node.get_node(self.root_id)
+
+    def set_root(self, max_keys):
+        initial_root = Node([], max_keys)
+        initial_root.is_root = True
+        self.root_id = initial_root.id
 
     def add_key(self, key):
         print("Adding key ", key)
@@ -24,17 +26,78 @@ class BTree:
 
         root = self.get_root()
         res = root.add_key(key)
+        
+        if res is None:
+            print("WTF")
+        split_info = res['split_info']
+        child_idx = res['child_idx']
 
-        if res:
-            # Must create new root
-            keys = [res['median']]
-            max_keys = root.max_keys
-            max_key = Node.get_node(res['right_id']).max_key
-            children_ids = [res['left_id'], res['right_id']]
-            new_root = Node(keys, max_keys, max_key, children_ids)
-            self.root_id = new_root.id
+        # If the root is a leaf and it overflowed handle here
+        if split_info == 'leaf overflow':
+            maybe_root = res['node']
+
+            if self.root_id == maybe_root.id:
+                print(self.root_id, maybe_root.id)
+                root_split_info = maybe_root.split()
+
+                if root_split_info:
+                    keys = [root_split_info['median']]
+                    max_keys = maybe_root.max_keys
+                    max_key = Node.get_node(root_split_info['right_id']).max_key
+                    children_ids = [root_split_info['left_id'], root_split_info['right_id']]
+                    new_root = Node(keys, max_keys, max_key, children_ids)
+                    new_root.is_root = True
+                    maybe_root.is_root = False
+                    self.root_id = new_root.id
+                    maybe_root.release_write()
+            else:
+                print("The root done changed")
+        # Otherwise if there is split info and the root is not a leaf
+        elif split_info:
+
+            maybe_root = res['node']
+            maybe_root.acquire_write()
+
+            # If this is still the root, then we must create a new root
+            if self.root_id == maybe_root.id:
+                print(self.root_id, maybe_root.id)
+                root_split_info = maybe_root.handle_split(split_info, child_idx)
+
+                if root_split_info:
+                    keys = [root_split_info['median']]
+                    max_keys = maybe_root.max_keys
+                    max_key = Node.get_node(root_split_info['right_id']).max_key
+                    children_ids = [root_split_info['left_id'], root_split_info['right_id']]
+                    new_root = Node(keys, max_keys, max_key, children_ids)
+                    new_root.is_root = True
+                    maybe_root.is_root = False
+                    self.root_id = new_root.id
+            else:
+                print("The root done changed")
+                
+            # if self.is_not_rightmost() and key > self.max_key:
+            #     self.release_write()
+            #     new_node = self.scan_right_for_write_guard(key)
+            #     new_node.acquire_write()
+            #     return new_node.handle_split(split_info, child_idx)
+
 
             return res
+
+    # def add_key2(self, key):
+    #     print("Adding key ", key)
+    #     self.num_keys += 1
+
+    #     root = self.get_root()
+    #     current = root
+    #     path = []
+
+    #     while not current.is_leaf():
+    #         path.append(current)
+    #         next = current.scan_node(key)
+    #         current = Node.get_node(next)
+
+    #     current.add_key_leaf()
 
     def remove_key(self, key):
         self.num_keys -= 1
@@ -66,7 +129,7 @@ class BTree:
             i += 1
 
         for i, node in enumerate(queue):
-            if hasattr(node, 'link'):
+            if node.is_not_rightmost():
                 print(node.keys, node.max_key, node.link)
             else:
                 print(node.keys, node.max_key, node.id)
@@ -89,6 +152,7 @@ class Node(Insertion, Deletion):
         self.max_key = max_key
         self.id = uuid.uuid4()
         self.lock = ReadWriteLock()
+        self.is_root = False
 
         # Add node to hash map, ensuring it has a unique id
         while Node.get_node(self.id) is not None:
@@ -149,6 +213,9 @@ class Node(Insertion, Deletion):
     def is_last_child(self, child_id):
         return child_id == self.children_ids[-1]
 
+    def is_not_rightmost(self):
+        return self.max_key is not None
+
     def find_idx(self, key):
         found_idx = False
         idx = None
@@ -168,67 +235,81 @@ class Node(Insertion, Deletion):
         print("We be scannin doe")
         curr_node = Node.get_node(self.link)
 
-        while hasattr(curr_node, 'link') and curr_node.max_key < key:
+        while curr_node.max_key is not None and curr_node.max_key < key:
             curr_node = Node.get_node(self.link)
 
         return curr_node
 
+    def scan_node(self, key):
+        child_idx = self.find_idx(key)
+
+        if self.is_not_rightmost() and key > self.max_key:
+            new_node = self.scan_right_for_write_guard(key)
+            return new_node.scan_node(key)
+
+        return self.children_ids[child_idx]
+        
+
 ### build tree
-btree = BTree(4)
-root = Node([13, 24, 30], 4, 39)
-child_one = Node([2, 3, 5, 7], 4, 13)
-child_two = Node([14, 16, 19, 22], 4, 24)
-child_three = Node([24, 27, 29], 4, 30)
-child_four = Node([33, 34, 38, 39], 4, 39)
-root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
-btree.root_id = root.id
+# btree = BTree(4)
+# root = Node([13, 24, 30], 4)
+# root.is_root = True
+# child_one = Node([2, 3, 5, 7], 4, 14)
+# child_two = Node([14, 16, 19, 22], 4, 24)
+# child_three = Node([24, 27, 29], 4, 33)
+# child_four = Node([33, 34, 38, 39], 4)
+# root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
+# btree.root_id = root.id
+# child_one.link = child_two.id
+# child_two.link = child_three.id
+# child_three.link = child_four.id
 
-btree.print()
-### Test adding keys
-# Add key to leaf
-btree.add_key(28)
-# Add key causing leaf split, while parent(root) has space
-btree.add_key(20)
-btree.print()
+# btree.print()
+# ### Test adding keys
+# # Add key to leaf
+# btree.add_key(28)
+# # Add key causing leaf split, while parent(root) has space
+# btree.add_key(20)
+# btree.print()
 
-# Add key causing leaf split, and parent(root) split -> increase depth of tree
-btree.add_key(8)
+# # Add key causing leaf split, and parent(root) split -> increase depth of tree
+# btree.add_key(8)
 
-# Add some more keys
-btree.add_key(10)
-btree.add_key(37)
-
-btree.print()
-
-### Test removing keys
-# Remove key from leaf
-# btree.remove_key(39)
-# btree.remove_key(28)
-
-# # Remove key from leaf, causing rotation right (from left sibling)
-# btree.remove_key(33)
-
-# # Remove key from leaf, causing rotation left (from right sibling)
-# btree.remove_key(3)
-
-# # Remove key from leaf, causing merge left (from right sibling)
-# btree.remove_key(37)
-
-# # Setup for next test
+# # Add some more keys
+# btree.add_key(10)
 # btree.add_key(37)
-# btree.add_key(39)
-# btree.remove_key(24)
 
-# # Remove key from leaf, causing merge right (from left sibling)
-# btree.remove_key(27)
+# btree.print()
 
-# # Remove additional key to setup next test
-# btree.remove_key(16)
+# ### Test removing keys
+# # Remove key from leaf
+# # btree.remove_key(39)
+# # btree.remove_key(28)
 
-# # Remove key causing rebalance propagating to the root, emptying it, and
-# # creating a new root
-# btree.remove_key(8)
+# # # Remove key from leaf, causing rotation right (from left sibling)
+# # btree.remove_key(33)
 
-btree.print()
-# pdb.set_trace()
-print("done")
+# # # Remove key from leaf, causing rotation left (from right sibling)
+# # btree.remove_key(3)
+
+# # # Remove key from leaf, causing merge left (from right sibling)
+# # btree.remove_key(37)
+
+# # # Setup for next test
+# # btree.add_key(37)
+# # btree.add_key(39)
+# # btree.remove_key(24)
+
+# # # Remove key from leaf, causing merge right (from left sibling)
+# # btree.remove_key(27)
+
+# # # Remove additional key to setup next test
+# # btree.remove_key(16)
+
+# # # Remove key causing rebalance propagating to the root, emptying it, and
+# # # creating a new root
+# # btree.remove_key(8)
+
+# btree.print()
+# # pdb.set_trace()
+# print("done")

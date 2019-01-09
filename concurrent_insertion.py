@@ -50,3 +50,9 @@ t2.join()
 # t3.join()
 # t4.join()
 btree.print()
+print(btree.root_id)
+
+# for i in range(10):
+#     btree.add_key(i)
+
+# btree.print()
