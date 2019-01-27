@@ -17,87 +17,104 @@ class BTree:
 
     def set_root(self, max_keys):
         initial_root = Node([], max_keys)
-        initial_root.is_root = True
         self.root_id = initial_root.id
+
+    def build_new_root(self, old_root, split_info):
+        keys = [split_info['median']]
+        max_keys = old_root.max_keys
+        max_key = Node.get_node(split_info['right_id']).max_key
+        children_ids = [split_info['left_id'], split_info['right_id']]
+
+        # Create new root
+        new_root = Node(keys, max_keys, max_key, children_ids)
+        self.root_id = new_root.id
+        
+        # Release lock on old root
+        old_root.release_read()
+        self.print()
 
     def add_key(self, key):
         print("Adding key ", key)
         self.num_keys += 1
 
         root = self.get_root()
-        res = root.add_key(key)
-        
-        if res is None:
-            print("WTF")
-        split_info = res['split_info']
-        child_idx = res['child_idx']
+        split_info = root.add_key(key)
 
-        # If the root is a leaf and it overflowed handle here
-        if split_info == 'leaf overflow':
-            maybe_root = res['node']
+        if split_info:
+            root.acquire_read()
 
-            if self.root_id == maybe_root.id:
-                print(self.root_id, maybe_root.id)
-                root_split_info = maybe_root.split()
-
-                if root_split_info:
-                    keys = [root_split_info['median']]
-                    max_keys = maybe_root.max_keys
-                    max_key = Node.get_node(root_split_info['right_id']).max_key
-                    children_ids = [root_split_info['left_id'], root_split_info['right_id']]
-                    new_root = Node(keys, max_keys, max_key, children_ids)
-                    new_root.is_root = True
-                    maybe_root.is_root = False
-                    self.root_id = new_root.id
-                    maybe_root.release_write()
+            if self.root_id == root.id:
+                self.build_new_root(root, split_info)
             else:
-                print("The root done changed")
-        # Otherwise if there is split info and the root is not a leaf
-        elif split_info:
+                # The root is no longer the root. We must re-descend to the node 
+                # we last split from the new root, and potentially by the time
+                # we finish doing that the new root will again no longer be the root
+                # Thus, this process is a loop.
+                while self.root_id != root.id:
+                    root.release_read()
+                    # Since the root was split, it's possible that it isn't even
+                    # the node we want to continue propagating up from
+                    while root.is_not_rightmost() and key > root.max_key:
+                        new_root = root.scan_right_for_write_guard(key)
+                        root = new_root
 
-            maybe_root = res['node']
-            maybe_root.acquire_write()
+                    # Redescend from new root node to find path
+                    path = self.find_path_from_new_root(root)
+                    root = path.pop()
 
-            # If this is still the root, then we must create a new root
-            if self.root_id == maybe_root.id:
-                print(self.root_id, maybe_root.id)
-                root_split_info = maybe_root.handle_split(split_info, child_idx)
+                    for node in path:
+                        node.acquire_write()
 
-                if root_split_info:
-                    keys = [root_split_info['median']]
-                    max_keys = maybe_root.max_keys
-                    max_key = Node.get_node(root_split_info['right_id']).max_key
-                    children_ids = [root_split_info['left_id'], root_split_info['right_id']]
-                    new_root = Node(keys, max_keys, max_key, children_ids)
-                    new_root.is_root = True
-                    maybe_root.is_root = False
-                    self.root_id = new_root.id
-            else:
-                print("The root done changed")
-                
-            # if self.is_not_rightmost() and key > self.max_key:
-            #     self.release_write()
-            #     new_node = self.scan_right_for_write_guard(key)
-            #     new_node.acquire_write()
-            #     return new_node.handle_split(split_info, child_idx)
+                        # Again, make sure this is the correct node to handle split
+                        while node.is_not_rightmost() and key > node.max_key:
+                            node.release_write()
+                            new_node = node.scan_right_for_write_guard(key)
+                            new_node.acquire_write()
+                            node = new_node
+                        
+                        child_idx = node.find_idx(key)
 
+                        # handle_split will take care of releasing write lock
+                        split_info = node.handle_split(split_info, child_idx) 
 
-            return res
+                        # If there is no split_info, there is no further propagation required
+                        if not split_info:
+                            return
+                    
+                    root.acquire_read()
+                    if self.root_id == root.id:
+                        return self.build_new_root(root, split_info)
 
-    # def add_key2(self, key):
-    #     print("Adding key ", key)
-    #     self.num_keys += 1
+    def find_path_from_new_root(self, old_root):
+        new_root = self.get_root()
+        new_root.acquire_read()
 
-    #     root = self.get_root()
-    #     current = root
-    #     path = []
+        # By the time we acquire read, root might have changed again
+        while new_root.id != self.root_id:
+            new_root.release_read()
+            new_root = self.get_root()
+            new_root.acquire_read()
+            
+        curr_node = new_root
+        path = []
+        search_key = old_root.keys[0]
 
-    #     while not current.is_leaf():
-    #         path.append(current)
-    #         next = current.scan_node(key)
-    #         current = Node.get_node(next)
+        while curr_node.id != old_root.id:
+            # Add current node to path
+            path.append(curr_node)
+            
+            # Find next node to add and release read lock
+            next_node_id = curr_node.scan_node(search_key)
+            curr_node.release_read()
 
-    #     current.add_key_leaf()
+            curr_node = Node.get_node(next_node_id)
+            curr_node.acquire_read()
+
+        # Release read lock on old root (old root IS curr_node at this point)
+        curr_node.release_read()
+
+        path.reverse()
+        return path
 
     def remove_key(self, key):
         self.num_keys -= 1
@@ -152,7 +169,7 @@ class Node(Insertion, Deletion):
         self.max_key = max_key
         self.id = uuid.uuid4()
         self.lock = ReadWriteLock()
-        self.is_root = False
+        self.link = None
 
         # Add node to hash map, ensuring it has a unique id
         while Node.get_node(self.id) is not None:
@@ -209,6 +226,9 @@ class Node(Insertion, Deletion):
 
     def release_write(self):
         self.lock.release_write()
+    
+    def locked(self):
+        return self.lock.locked()
 
     def is_last_child(self, child_id):
         return child_id == self.children_ids[-1]
@@ -232,19 +252,27 @@ class Node(Insertion, Deletion):
         return idx
     
     def scan_right_for_write_guard(self, key):
-        print("We be scannin doe")
+        print("Scanning...")
         curr_node = Node.get_node(self.link)
 
-        while curr_node.max_key is not None and curr_node.max_key < key:
+        # Want to read-lock curr_node when reading its properties
+        while curr_node.is_not_rightmost() and key > curr_node.max_key:
             curr_node = Node.get_node(self.link)
 
         return curr_node
 
     def scan_node(self, key):
+        if not self.locked():
+            raise 'Node is not locked'
         child_idx = self.find_idx(key)
 
         if self.is_not_rightmost() and key > self.max_key:
             new_node = self.scan_right_for_write_guard(key)
+
+            # Release read on old node and acquire read on new node
+            self.release_read()
+            new_node.acquire_read()
+
             return new_node.scan_node(key)
 
         return self.children_ids[child_idx]
@@ -253,7 +281,6 @@ class Node(Insertion, Deletion):
 ### build tree
 # btree = BTree(4)
 # root = Node([13, 24, 30], 4)
-# root.is_root = True
 # child_one = Node([2, 3, 5, 7], 4, 14)
 # child_two = Node([14, 16, 19, 22], 4, 24)
 # child_three = Node([24, 27, 29], 4, 33)
@@ -313,3 +340,118 @@ class Node(Insertion, Deletion):
 # btree.print()
 # # pdb.set_trace()
 # print("done")
+
+# # If the root is a leaf and it overflowed handle here
+#         if split_info == 'leaf overflow':
+#             print(root.lock.locked())
+#             root_split_info = root.split()
+
+#             if self.root_id == root.id:
+#                 self.build_new_root(root, root_split_info)
+#                 root.release_write()
+#                 print("Created new root and unlocked old root")
+#             else:
+#                 # Build path from new root to old root
+#                 new_root = self.get_root()
+#                 curr_node = new_root
+#                 path = []
+#                 search_key = root.keys[0]
+
+#                 while curr_node.id != root.id:
+#                     path.append(curr_node)
+#                     next_node_id = curr_node.scan_node(search_key)
+#                     curr_node = Node.get_node(next_node_id)
+
+#                 path.reverse()
+#                 split_info = root_split_info
+#                 print(root.lock.locked(), root.keys)
+#                 self.print()
+#                 root.release_write()
+
+#                 # Handle split going up from old root, while ensuring we are at
+#                 # the appropriate node on each level (could have changed since
+#                 # building path)
+#                 for _, node in enumerate(path):
+#                     if split_info:
+#                         split_info['split_node'].release_write()
+
+#                     node.acquire_write()
+#                     while node.is_not_rightmost() and key > node.max_key:
+#                         node.release_write()
+#                         new_node = node.scan_right_for_write_guard(key)
+#                         new_node.acquire_write()
+#                         node = new_node
+
+#                     if split_info:
+#                         split_info = node.handle_split(split_info, child_idx)
+#                     else:
+#                         return
+#         # Otherwise if there is split info and the root is not a leaf
+#         elif split_info:
+#             root.acquire_write()
+#             print('Locked non-leaf root with keys ', root.keys)
+
+#             # If this is still the root, then we must create a new root
+#             if self.root_id == root.id:
+#                 root_split_info = root.handle_split(split_info, child_idx)
+
+#                 if root_split_info:
+#                     self.build_new_root(root, root_split_info)
+#                     root.release_write()
+#             # Otherwise, trace path from new root to here and continue splitting
+#             # upwards
+#             else:
+#                 new_root = self.get_root()
+#                 curr_node = new_root
+#                 path = []
+#                 search_key = root.keys[0]
+
+#                 while curr_node.id != root.id:
+#                     path.append(curr_node)
+#                     next_node_id = curr_node.scan_node(search_key)
+#                     curr_node = Node.get_node(next_node_id)
+
+#                 print("Made it back to the root from internal! Now what...")
+#                 path.reverse()
+
+#                 # Handle split going up from old root, while ensuring we are at
+#                 # the appropriate node on each level (could have changed since
+#                 # building path)
+#                 for _, node in enumerate(path):
+#                     if split_info:
+#                         split_info['split_node'].release_write()
+
+#                     node.acquire_write()
+#                     while node.is_not_rightmost() and key > node.max_key:
+#                         node.release_write()
+#                         new_node = node.scan_right_for_write_guard(key)
+#                         new_node.acquire_write()
+#                         node = new_node
+
+#                     if split_info:
+#                         split_info = node.handle_split(split_info, child_idx)
+#                     else:
+#                         return
+
+            # if self.is_not_rightmost() and key > self.max_key:
+            #     self.release_write()
+            #     new_node = self.scan_right_for_write_guard(key)
+            #     new_node.acquire_write()
+            #     return new_node.handle_split(split_info, child_idx)
+
+            # return res
+
+    # def add_key2(self, key):
+    #     print("Adding key ", key)
+    #     self.num_keys += 1
+
+    #     root = self.get_root()
+    #     current = root
+    #     path = []
+
+    #     while not current.is_leaf():
+    #         path.append(current)
+    #         next = current.scan_node(key)
+    #         current = Node.get_node(next)
+
+    #     current.add_key_leaf()

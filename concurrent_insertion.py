@@ -5,23 +5,33 @@ from btree import *
 import pdb
 
 btree = core.BTree(4)
-# btree.root = core.Node([13, 24, 30], 4)
-# child_one = core.Node([2, 3, 5, 7], 4)
-# child_two = core.Node([14, 16, 19, 22], 4)
-# child_three = core.Node([24, 27, 29], 4)
-# child_four = core.Node([33, 34, 38, 39], 4)
-# btree.root.children_ids = [child_one.id, child_two.id, child_three.id, child_four.id]
+# root = core.Node([24], 4)
+# child_one_l1 = core.Node([5, 13], 4, 24)
+# child_two_l1 = core.Node([30, 36], 4)
+# child_one_l2 = core.Node([1, 2, 4], 4, 5)
+# child_two_l2 = core.Node([5, 7, 8], 4, 13)
+# child_three_l2 = core.Node([14, 16, 19, 22], 4, 24)
+# child_four_l2 = core.Node([25, 28, 29], 4, 30)
+# child_five_l2 = core.Node([32, 34, 35], 4, 36)
+# child_six_l2 = core.Node([37, 40], 4)
+
+# child_one_l1.children_ids = [child_one_l2.id, child_two_l2.id, child_three_l2.id]
+# child_two_l1.children_ids = [child_four_l2.id, child_five_l2.id, child_six_l2.id]
+# root.children_ids = [child_one_l1.id, child_two_l1.id]
+
+# btree.root_id = root.id
+btree.print()
 
 class Thread1(Thread):
     def run(self):
         global btree
-        for i in range(10):
+        for i in range(1000):
             btree.add_key(i)
 
 class Thread2(Thread):
     def run(self):
         global btree
-        for i in range(10):
+        for i in range(1000):
             btree.add_key(i+1000)
 
 class Thread3(Thread):
