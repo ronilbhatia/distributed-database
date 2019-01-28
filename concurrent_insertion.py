@@ -25,14 +25,14 @@ btree.print()
 class Thread1(Thread):
     def run(self):
         global btree
-        for i in range(1000):
+        for i in range(100000):
             btree.add_key(i)
 
 class Thread2(Thread):
     def run(self):
         global btree
-        for i in range(1000):
-            btree.add_key(i+1000)
+        for i in range(100000):
+            btree.add_key(i+100000)
 
 class Thread3(Thread):
     def run(self):

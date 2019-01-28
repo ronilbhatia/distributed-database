@@ -30,7 +30,7 @@ class BTree:
         self.root_id = new_root.id
         
         # Release lock on old root
-        old_root.release_read()
+        old_root.release_write()
         self.print()
 
     def add_key(self, key):
@@ -41,7 +41,7 @@ class BTree:
         split_info = root.add_key(key)
 
         if split_info:
-            root.acquire_read()
+            root.acquire_write()
 
             if self.root_id == root.id:
                 self.build_new_root(root, split_info)
@@ -51,7 +51,7 @@ class BTree:
                 # we finish doing that the new root will again no longer be the root
                 # Thus, this process is a loop.
                 while self.root_id != root.id:
-                    root.release_read()
+                    root.release_write()
                     # Since the root was split, it's possible that it isn't even
                     # the node we want to continue propagating up from
                     while root.is_not_rightmost() and key > root.max_key:
@@ -81,7 +81,7 @@ class BTree:
                         if not split_info:
                             return
                     
-                    root.acquire_read()
+                    root.acquire_write()
                     if self.root_id == root.id:
                         return self.build_new_root(root, split_info)
 
