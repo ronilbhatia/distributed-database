@@ -12,17 +12,23 @@ class BTree:
 
     def set_root(self, max_keys):
         initial_root = Node([], max_keys)
-        self.root_id = initial_root.id
+        self.root_id = initial_root.get_id()
 
     def build_new_root(self, old_root, split_info):
         keys = [split_info['median']]
-        max_keys = old_root.max_keys
-        max_key = Node.get_node(split_info['right_id']).max_key
+        max_keys = old_root.get_max_keys()
+
+        right_node = Node.get_node(split_info['right_id'])
+        # NR: I think you didn't have a call to lock the right_node
+        # here.
+        right_node.acquire_read()
+        max_key = right_node.get_max_key()
+        right_node.release_read()
         children_ids = [split_info['left_id'], split_info['right_id']]
 
         # Create new root
         new_root = Node(keys, max_keys, max_key, children_ids)
-        self.root_id = new_root.id
+        self.root_id = new_root.get_id()
 
         # Release lock on old root
         old_root.release_write()
@@ -38,14 +44,14 @@ class BTree:
         if split_info:
             root.acquire_write()
 
-            if self.root_id == root.id:
+            if self.root_id == root.get_id():
                 self.build_new_root(root, split_info)
             else:
                 # The root is no longer the root. We must re-descend to the node
                 # we last split from the new root, and potentially by the time
                 # we finish doing that the new root will again no longer be the root
                 # Thus, this process is a loop.
-                while self.root_id != root.id:
+                while self.root_id != root.get_id():
                     root.release_write()
                     # Since the root was split, it's possible that it isn't even
                     # the node we want to continue propagating up from
@@ -77,7 +83,7 @@ class BTree:
                             return
 
                     root.acquire_write()
-                    if self.root_id == root.id:
+                    if self.root_id == root.get_id():
                         return self.build_new_root(root, split_info)
 
     def find_path_from_new_root(self, old_root):
@@ -85,7 +91,7 @@ class BTree:
         new_root.acquire_read()
 
         # By the time we acquire read, root might have changed again
-        while new_root.id != self.root_id:
+        while new_root.get_id() != self.root_id:
             new_root.release_read()
             new_root = self.get_root()
             new_root.acquire_read()
@@ -94,7 +100,7 @@ class BTree:
         path = []
         search_key = old_root.keys[0]
 
-        while curr_node.id != old_root.id:
+        while curr_node.get_id() != old_root.get_id():
             # Add current node to path
             path.append(curr_node)
 
@@ -121,7 +127,7 @@ class BTree:
         # new root
         if root.is_empty():
             new_root = Node.get_node(root.children_ids[0])
-            self.root_id = new_root.id
+            self.root_id = new_root.get_id()
 
     def print(self):
         curr_node = self.get_root()
@@ -144,7 +150,7 @@ class BTree:
             if node.is_not_rightmost():
                 print(node.keys, node.max_key, node.link)
             else:
-                print(node.keys, node.max_key, node.id)
+                print(node.keys, node.max_key, node.get_id())
 
 
         print("-----------------------")
