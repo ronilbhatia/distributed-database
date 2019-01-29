@@ -22,16 +22,18 @@ btree = core.BTree(4)
 # btree.root_id = root.id
 # btree.print()
 
+NUM_INSERTS = 100
+
 class Thread1(Thread):
     def run(self):
         global btree
-        for i in range(100000):
+        for i in range(NUM_INSERTS):
             btree.add_key(i)
 
 class Thread2(Thread):
     def run(self):
         global btree
-        for i in range(100000):
+        for i in range(NUM_INSERTS):
             btree.add_key(i+100000)
 
 class Thread3(Thread):
