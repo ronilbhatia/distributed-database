@@ -190,43 +190,10 @@ class Node(Insertion, Deletion):
 
         self.children_ids = children_ids
 
-    def get_child_at_index(self, child_idx):
-        if child_idx < 0 or child_idx >= len(self.children_ids):
-            return None
-        else:
-            return Node.get_node(self.children_ids[child_idx])
-
-    # gives a list comprehension, taking each child id and looking up in
-    # hash map
-    def get_children(self):
-        # children = map(lambda id: Node.get_node(id), self.children_ids)
-        children = [Node.get_node(id) for id in self.children_ids]
-        return children
-
-    def num_keys(self):
-        return len(self.keys)
-
-    def is_full(self):
-        return self.num_keys() == self.max_keys
-
-    def is_stable(self):
-        return self.num_keys() < self.max_keys
-
-    def overflow(self):
-        return self.num_keys() > self.max_keys
-
-    def is_empty(self):
-        return self.num_keys() == 0
-
-    def is_leaf(self):
-        return len(self.children_ids) == 0
-
-    def can_give_up_keys(self):
-        return self.min_keys < self.num_keys()
-
-    def is_deficient(self):
-        return self.num_keys() < self.min_keys
-
+    # == LOCKING METHODS ==
+    #
+    # We will rely on the ReadWriteLock methods to protect us from
+    # reacquisition.
     def acquire_read(self):
         self.lock.acquire_read()
 
@@ -238,17 +205,106 @@ class Node(Insertion, Deletion):
 
     def release_write(self):
         self.lock.release_write()
-    
-    def locked(self):
-        return self.lock.locked()
+
+    # == READ METHODS ==
+    #
+    # These will all require a lock for reading. But they don't do any
+    # writing.
+
+    def get_child_at_index(self, child_idx):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        if child_idx < 0 or child_idx >= len(self.children_ids):
+            return None
+        else:
+            return Node.get_node(self.children_ids[child_idx])
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    # gives a list comprehension, taking each child id and looking up in
+    # hash map
+    def get_children(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        # children = map(lambda id: Node.get_node(id), self.children_ids)
+        children = [Node.get_node(id) for id in self.children_ids]
+        return children
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def num_keys(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return len(self.keys)
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def is_full(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.num_keys() == self.max_keys
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def is_stable(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.num_keys() < self.max_keys
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def overflow(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.num_keys() > self.max_keys
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def is_empty(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.num_keys() == 0
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def is_leaf(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return len(self.children_ids) == 0
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def can_give_up_keys(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.min_keys < self.num_keys()
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
+    def is_deficient(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
+        return self.num_keys() < self.min_keys
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
 
     def is_last_child(self, child_id):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
         return child_id == self.children_ids[-1]
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
 
     def is_not_rightmost(self):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
         return self.max_key is not None
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
 
     def find_idx(self, key):
+      self.lock.assert_is_locked_by_current_thread()
+      try:
         found_idx = False
         idx = None
 
@@ -262,7 +318,9 @@ class Node(Insertion, Deletion):
             idx = self.num_keys()
 
         return idx
-    
+      finally:
+        self.lock.assert_is_locked_by_current_thread()
+
     def scan_right_for_write_guard(self, key):
         print("Scanning...")
         curr_node = Node.get_node(self.link)
@@ -288,7 +346,7 @@ class Node(Insertion, Deletion):
             return new_node.scan_node(key)
 
         return self.children_ids[child_idx]
-        
+
 
 ### build tree
 # btree = BTree(4)
