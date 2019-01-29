@@ -23,10 +23,10 @@ class BTree:
         # Create new root
         new_root = Node(keys, max_keys, max_key, children_ids)
         self.root_id = new_root.id
-        
+
         # Release lock on old root
         old_root.release_write()
-        self.print()
+        # self.print()
 
     def add_key(self, key):
         print("Adding key ", key)
@@ -41,7 +41,7 @@ class BTree:
             if self.root_id == root.id:
                 self.build_new_root(root, split_info)
             else:
-                # The root is no longer the root. We must re-descend to the node 
+                # The root is no longer the root. We must re-descend to the node
                 # we last split from the new root, and potentially by the time
                 # we finish doing that the new root will again no longer be the root
                 # Thus, this process is a loop.
@@ -66,16 +66,16 @@ class BTree:
                             new_node = node.scan_right_for_write_guard(key)
                             new_node.acquire_write()
                             node = new_node
-                        
+
                         child_idx = node.find_idx(key)
 
                         # handle_split will take care of releasing write lock
-                        split_info = node.handle_split(split_info, child_idx) 
+                        split_info = node.handle_split(split_info, child_idx)
 
                         # If there is no split_info, there is no further propagation required
                         if not split_info:
                             return
-                    
+
                     root.acquire_write()
                     if self.root_id == root.id:
                         return self.build_new_root(root, split_info)
@@ -89,7 +89,7 @@ class BTree:
             new_root.release_read()
             new_root = self.get_root()
             new_root.acquire_read()
-            
+
         curr_node = new_root
         path = []
         search_key = old_root.keys[0]
@@ -97,7 +97,7 @@ class BTree:
         while curr_node.id != old_root.id:
             # Add current node to path
             path.append(curr_node)
-            
+
             # Find next node to add and release read lock
             next_node_id = curr_node.scan_node(search_key)
             curr_node.release_read()

@@ -20,7 +20,7 @@ btree = core.BTree(4)
 # root.children_ids = [child_one_l1.id, child_two_l1.id]
 
 # btree.root_id = root.id
-btree.print()
+# btree.print()
 
 class Thread1(Thread):
     def run(self):
@@ -59,7 +59,7 @@ t.join()
 t2.join()
 # t3.join()
 # t4.join()
-btree.print()
+# btree.print()
 print(btree.root_id)
 
 # for i in range(10):
