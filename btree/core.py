@@ -1,9 +1,4 @@
-import pdb
-import uuid
-from locking.lock import ReadWriteLock
-from btree.insertion import Insertion
-from btree.deletion import Deletion
-from btree.reading import Reading
+from .node import Node
 
 class BTree:
     def __init__(self, max_keys = 2):
@@ -153,84 +148,6 @@ class BTree:
 
 
         print("-----------------------")
-
-class Node(Reading, Insertion, Deletion):
-    # Class variable to store all nodes
-    __nodes_map = {}
-    __nodes_map_lock = ReadWriteLock()
-
-    @classmethod
-    def get_node(self, id):
-      self.__nodes_map_lock.acquire_read()
-      node = self.__nodes_map.get(id)
-      self.__nodes_map_lock.release_read()
-      return node
-
-    @classmethod
-    def add_node(self, node):
-      self.__nodes_map_lock.acquire_write()
-      if node.id in self.__nodes_map:
-        raise "There is a race condition here..."
-      self.__nodes_map[node.id] = node
-      self.__nodes_map_lock.release_write()
-
-    def __init__(self, keys = [], max_keys = 2, max_key = None, children_ids = []):
-        self.keys = keys
-        self.max_keys = max_keys
-        self.min_keys = max_keys // 2
-        self.max_key = max_key
-        self.id = uuid.uuid4()
-        self.lock = ReadWriteLock()
-        self.link = None
-
-        # Add node to hash map, ensuring it has a unique id
-        while Node.get_node(self.id) is not None:
-            self.id = uuid.uuid4()
-        Node.add_node(self)
-
-        self.children_ids = children_ids
-
-    # == LOCKING METHODS ==
-    #
-    # We will rely on the ReadWriteLock methods to protect us from
-    # reacquisition.
-    def acquire_read(self):
-        self.lock.acquire_read()
-
-    def acquire_write(self):
-        self.lock.acquire_write()
-
-    def release_read(self):
-        self.lock.release_read()
-
-    def release_write(self):
-        self.lock.release_write()
-
-    def scan_right_for_write_guard(self, key):
-        print("Scanning...")
-        curr_node = Node.get_node(self.link)
-
-        # Want to read-lock curr_node when reading its properties
-        while curr_node.is_not_rightmost() and key > curr_node.max_key:
-            curr_node = Node.get_node(self.link)
-
-        return curr_node
-
-    def scan_node(self, key):
-        if not self.locked():
-            raise 'Node is not locked'
-        child_idx = self.find_idx(key)
-
-        if self.is_not_rightmost() and key > self.max_key:
-            new_node = self.scan_right_for_write_guard(key)
-
-            # Release read on old node and acquire read on new node
-            self.release_read()
-            new_node.acquire_read()
-
-            return new_node.scan_node(key)
-
-        return self.children_ids[child_idx]
 
 
 ### build tree

@@ -1,12 +1,10 @@
-import pdb
-
 class Insertion:
     def add_key(self, key):
         if self.is_leaf():
             return self.add_key_leaf(key)
         else:
             return self.add_key_internal(key)
-                
+
     def add_key_leaf(self, key):
         self.acquire_write()
 
@@ -17,13 +15,13 @@ class Insertion:
 
         key_idx = self.find_idx(key)
         self.keys.insert(key_idx, key)
-    
+
         # if the node is overflowed we need to split it
         if self.overflow():
             return self.split()
         else:
             self.release_write()
-                
+
 
     def add_key_internal(self, key):
         # Need to lock self before reading anything
@@ -34,6 +32,7 @@ class Insertion:
         # This node might have been split by the time we reach it, and no longer
         # be the appropriate sub-tree where the key exists, so we scan right
         if self.is_not_rightmost() and key > self.max_key:
+            # NR: Must release read lock first before scanning.
             new_node = self.scan_right_for_write_guard(key)
             self.release_read()
 
@@ -60,7 +59,7 @@ class Insertion:
                 node.release_write()
                 new_node.acquire_write()
                 node = new_node
-            
+
             # Find child_idx again because could be at a different node
             child_idx = node.find_idx(key)
             return node.handle_split(split_info, child_idx)
@@ -123,7 +122,7 @@ class Insertion:
         # Check that left_id is equal to the id already at children_ids[child_idx]
         if not self.children_ids[child_idx] == left_id:
             raise "Not at the correct parent node"
-            
+
         self.children_ids.insert(child_idx + 1, right_id)
         self.keys.insert(child_idx, median)
 
