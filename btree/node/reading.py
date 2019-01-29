@@ -12,7 +12,7 @@ class Reading:
       if child_idx < 0 or child_idx >= len(self.get_children_ids()):
           return None
       else:
-          return Node.get_node(self.get_children_ids()[child_idx])
+          return Base.get_node(self.get_children_ids()[child_idx])
     finally:
       self.assert_is_locked_by_current_thread()
 
