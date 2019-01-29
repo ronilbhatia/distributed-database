@@ -156,11 +156,23 @@ class BTree:
 
 class Node(Insertion, Deletion):
     # Class variable to store all nodes
-    nodes = {}
+    __nodes_map = {}
+    __nodes_map_lock = ReadWriteLock()
 
     @classmethod
     def get_node(self, id):
-        return self.nodes.get(id)
+      self.__nodes_map_lock.acquire_read()
+      node = self.__nodes_map.get(id)
+      self.__nodes_map_lock.release_read()
+      return node
+
+    @classmethod
+    def add_node(self, node):
+      self.__nodes_map_lock.acquire_write()
+      if node.id in self.__nodes_map:
+        raise "There is a race condition here..."
+      self.__nodes_map[node.id] = node
+      self.__nodes_map_lock.release_write()
 
     def __init__(self, keys = [], max_keys = 2, max_key = None, children_ids = []):
         self.keys = keys
@@ -174,7 +186,7 @@ class Node(Insertion, Deletion):
         # Add node to hash map, ensuring it has a unique id
         while Node.get_node(self.id) is not None:
             self.id = uuid.uuid4()
-        Node.nodes[self.id] = self
+        Node.add_node(self)
 
         self.children_ids = children_ids
 
