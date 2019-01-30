@@ -1,4 +1,4 @@
-import pdb
+raise Exception("This file is not reviewed yet.")
 
 class Deletion:
     def remove_key(self, key):
@@ -104,7 +104,7 @@ class Deletion:
         if not child.is_leaf():
             right_sibling.keys.insert(0, separator)
 
-        self.children_ids.remove(child.id)
+        self.children_ids.remove(child.get_id())
 
         right_sibling.keys = child.keys + right_sibling.keys
         right_sibling.children_ids = child.children_ids + right_sibling.children_ids

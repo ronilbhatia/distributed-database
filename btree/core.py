@@ -1,9 +1,4 @@
-import pdb
-import uuid
-from locking.lock import ReadWriteLock
-from btree.insertion import Insertion
-from btree.deletion import Deletion
-
+from .node import Node
 
 class BTree:
     def __init__(self, max_keys = 2):
@@ -17,21 +12,27 @@ class BTree:
 
     def set_root(self, max_keys):
         initial_root = Node([], max_keys)
-        self.root_id = initial_root.id
+        self.root_id = initial_root.get_id()
 
     def build_new_root(self, old_root, split_info):
         keys = [split_info['median']]
-        max_keys = old_root.max_keys
-        max_key = Node.get_node(split_info['right_id']).max_key
+        max_keys = old_root.get_max_keys()
+
+        right_node = Node.get_node(split_info['right_id'])
+        # NR: I think you didn't have a call to lock the right_node
+        # here.
+        right_node.acquire_read()
+        max_key = right_node.get_max_key()
+        right_node.release_read()
         children_ids = [split_info['left_id'], split_info['right_id']]
 
         # Create new root
         new_root = Node(keys, max_keys, max_key, children_ids)
-        self.root_id = new_root.id
-        
+        self.root_id = new_root.get_id()
+
         # Release lock on old root
         old_root.release_write()
-        self.print()
+        # self.print()
 
     def add_key(self, key):
         print("Adding key ", key)
@@ -43,14 +44,14 @@ class BTree:
         if split_info:
             root.acquire_write()
 
-            if self.root_id == root.id:
+            if self.root_id == root.get_id():
                 self.build_new_root(root, split_info)
             else:
-                # The root is no longer the root. We must re-descend to the node 
+                # The root is no longer the root. We must re-descend to the node
                 # we last split from the new root, and potentially by the time
                 # we finish doing that the new root will again no longer be the root
                 # Thus, this process is a loop.
-                while self.root_id != root.id:
+                while self.root_id != root.get_id():
                     root.release_write()
                     # Since the root was split, it's possible that it isn't even
                     # the node we want to continue propagating up from
@@ -71,18 +72,18 @@ class BTree:
                             new_node = node.scan_right_for_write_guard(key)
                             new_node.acquire_write()
                             node = new_node
-                        
+
                         child_idx = node.find_idx(key)
 
                         # handle_split will take care of releasing write lock
-                        split_info = node.handle_split(split_info, child_idx) 
+                        split_info = node.handle_split(split_info, child_idx)
 
                         # If there is no split_info, there is no further propagation required
                         if not split_info:
                             return
-                    
+
                     root.acquire_write()
-                    if self.root_id == root.id:
+                    if self.root_id == root.get_id():
                         return self.build_new_root(root, split_info)
 
     def find_path_from_new_root(self, old_root):
@@ -90,19 +91,19 @@ class BTree:
         new_root.acquire_read()
 
         # By the time we acquire read, root might have changed again
-        while new_root.id != self.root_id:
+        while new_root.get_id() != self.root_id:
             new_root.release_read()
             new_root = self.get_root()
             new_root.acquire_read()
-            
+
         curr_node = new_root
         path = []
         search_key = old_root.keys[0]
 
-        while curr_node.id != old_root.id:
+        while curr_node.get_id() != old_root.get_id():
             # Add current node to path
             path.append(curr_node)
-            
+
             # Find next node to add and release read lock
             next_node_id = curr_node.scan_node(search_key)
             curr_node.release_read()
@@ -126,7 +127,7 @@ class BTree:
         # new root
         if root.is_empty():
             new_root = Node.get_node(root.children_ids[0])
-            self.root_id = new_root.id
+            self.root_id = new_root.get_id()
 
     def print(self):
         curr_node = self.get_root()
@@ -149,134 +150,11 @@ class BTree:
             if node.is_not_rightmost():
                 print(node.keys, node.max_key, node.link)
             else:
-                print(node.keys, node.max_key, node.id)
+                print(node.keys, node.max_key, node.get_id())
 
 
         print("-----------------------")
 
-class Node(Insertion, Deletion):
-    # Class variable to store all nodes
-    nodes = {}
-
-    @classmethod
-    def get_node(self, id):
-        return self.nodes.get(id)
-
-    def __init__(self, keys = [], max_keys = 2, max_key = None, children_ids = []):
-        self.keys = keys
-        self.max_keys = max_keys
-        self.min_keys = max_keys // 2
-        self.max_key = max_key
-        self.id = uuid.uuid4()
-        self.lock = ReadWriteLock()
-        self.link = None
-
-        # Add node to hash map, ensuring it has a unique id
-        while Node.get_node(self.id) is not None:
-            self.id = uuid.uuid4()
-        Node.nodes[self.id] = self
-
-        self.children_ids = children_ids
-
-    def get_child_at_index(self, child_idx):
-        if child_idx < 0 or child_idx >= len(self.children_ids):
-            return None
-        else:
-            return Node.get_node(self.children_ids[child_idx])
-
-    # gives a list comprehension, taking each child id and looking up in
-    # hash map
-    def get_children(self):
-        # children = map(lambda id: Node.get_node(id), self.children_ids)
-        children = [Node.get_node(id) for id in self.children_ids]
-        return children
-
-    def num_keys(self):
-        return len(self.keys)
-
-    def is_full(self):
-        return self.num_keys() == self.max_keys
-
-    def is_stable(self):
-        return self.num_keys() < self.max_keys
-
-    def overflow(self):
-        return self.num_keys() > self.max_keys
-
-    def is_empty(self):
-        return self.num_keys() == 0
-
-    def is_leaf(self):
-        return len(self.children_ids) == 0
-
-    def can_give_up_keys(self):
-        return self.min_keys < self.num_keys()
-
-    def is_deficient(self):
-        return self.num_keys() < self.min_keys
-
-    def acquire_read(self):
-        self.lock.acquire_read()
-
-    def acquire_write(self):
-        self.lock.acquire_write()
-
-    def release_read(self):
-        self.lock.release_read()
-
-    def release_write(self):
-        self.lock.release_write()
-    
-    def locked(self):
-        return self.lock.locked()
-
-    def is_last_child(self, child_id):
-        return child_id == self.children_ids[-1]
-
-    def is_not_rightmost(self):
-        return self.max_key is not None
-
-    def find_idx(self, key):
-        found_idx = False
-        idx = None
-
-        for i, curr_key in enumerate(self.keys):
-            if key < curr_key:
-                found_idx = True
-                idx = i
-                break
-
-        if not found_idx:
-            idx = self.num_keys()
-
-        return idx
-    
-    def scan_right_for_write_guard(self, key):
-        print("Scanning...")
-        curr_node = Node.get_node(self.link)
-
-        # Want to read-lock curr_node when reading its properties
-        while curr_node.is_not_rightmost() and key > curr_node.max_key:
-            curr_node = Node.get_node(self.link)
-
-        return curr_node
-
-    def scan_node(self, key):
-        if not self.locked():
-            raise 'Node is not locked'
-        child_idx = self.find_idx(key)
-
-        if self.is_not_rightmost() and key > self.max_key:
-            new_node = self.scan_right_for_write_guard(key)
-
-            # Release read on old node and acquire read on new node
-            self.release_read()
-            new_node.acquire_read()
-
-            return new_node.scan_node(key)
-
-        return self.children_ids[child_idx]
-        
 
 ### build tree
 # btree = BTree(4)
