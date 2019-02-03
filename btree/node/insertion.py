@@ -12,9 +12,11 @@ class Insertion:
     def add_key_leaf(self, key):
         self.acquire_write()
 
-        if self.is_not_rightmost() and key > self.get_max_key():
+        if self.is_not_rightmost() and self.max_key_is_smaller_than(key):
             self.release_write()
-            new_node = self.scan_right_for_write_guard(key)
+            self.acquire_read()
+            new_node = self.scan_right_for_read_guard(key)
+            new_node.release_read()
             return new_node.add_key_leaf(key)
 
         key_idx = self.find_idx(key)
@@ -37,14 +39,14 @@ class Insertion:
 
         # This node might have been split by the time we reach it, and no longer
         # be the appropriate sub-tree where the key exists, so we scan right
-        if self.is_not_rightmost() and key > self.get_max_key():
+        if self.is_not_rightmost() and self.max_key_is_smaller_than(key):
             # NR: Must release read lock first before scanning.
-            new_node = self.scan_right_for_write_guard(key)
-            self.release_read()
+            new_node = self.scan_right_for_read_guard(key)
 
             # Unlock node for reading before doing this
+            new_node.release_read()
             return new_node.add_key_internal(key)
-
+        
         # if the node is not a leaf we must find the appropriate
         # child to attempt to add the key to
         child_idx = self.find_idx(key)
@@ -62,8 +64,6 @@ class Insertion:
 
             while node.is_not_rightmost() and key > node.get_max_key():
                 new_node = node.scan_right_for_write_guard(key)
-                node.release_write()
-                new_node.acquire_write()
                 node = new_node
 
             # Find child_idx again because could be at a different node

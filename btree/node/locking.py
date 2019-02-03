@@ -18,5 +18,11 @@ class Locking:
   def assert_is_locked_by_current_thread(self):
     self.get_lock().assert_is_locked_by_current_thread()
 
+  def assert_is_read_locked_by_current_thread(self):
+    self.get_lock().assert_is_read_locked_by_current_thread()
+
+  def assert_is_unlocked_by_current_thread(self):
+    self.get_lock().assert_is_unlocked_by_current_thread()
+
   def assert_is_write_locked_by_current_thread(self):
     self.get_lock().assert_is_write_locked_by_current_thread()

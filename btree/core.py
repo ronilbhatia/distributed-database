@@ -15,6 +15,7 @@ class BTree:
         self.root_id = initial_root.get_id()
 
     def build_new_root(self, old_root, split_info):
+        old_root.assert_is_write_locked_by_current_thread()
         keys = [split_info['median']]
         max_keys = old_root.get_max_keys()
 
@@ -32,7 +33,9 @@ class BTree:
 
         # Release lock on old root
         old_root.release_write()
-        # self.print()
+
+        old_root.assert_is_unlocked_by_current_thread()
+        new_root.assert_is_unlocked_by_current_thread()
 
     def add_key(self, key):
         print("Adding key ", key)
@@ -52,15 +55,16 @@ class BTree:
                 # we finish doing that the new root will again no longer be the root
                 # Thus, this process is a loop.
                 while self.root_id != root.get_id():
-                    root.release_write()
+                    last_node = root
+                    last_node.release_write()
+                    last_node.acquire_read()
                     # Since the root was split, it's possible that it isn't even
                     # the node we want to continue propagating up from
-                    while root.is_not_rightmost() and key > root.max_key:
-                        new_root = root.scan_right_for_write_guard(key)
-                        root = new_root
+                    while last_node.is_not_rightmost() and key > last_node.get_max_key():
+                        last_node = last_node.scan_right_for_read_guard(key)
 
-                    # Redescend from new root node to find path
-                    path = self.find_path_from_new_root(root)
+                    # Redescend from new root node to find path to last node
+                    path = self.find_path_from_new_root(last_node)
                     root = path.pop()
 
                     for node in path:
@@ -70,7 +74,6 @@ class BTree:
                         while node.is_not_rightmost() and key > node.max_key:
                             node.release_write()
                             new_node = node.scan_right_for_write_guard(key)
-                            new_node.acquire_write()
                             node = new_node
 
                         child_idx = node.find_idx(key)
@@ -86,36 +89,35 @@ class BTree:
                     if self.root_id == root.get_id():
                         return self.build_new_root(root, split_info)
 
-    def find_path_from_new_root(self, old_root):
-        new_root = self.get_root()
-        new_root.acquire_read()
+    def find_path_from_new_root(self, last_node):
+        last_node.assert_is_locked_by_current_thread()
 
-        # By the time we acquire read, root might have changed again
-        while new_root.get_id() != self.root_id:
-            new_root.release_read()
+        try:
             new_root = self.get_root()
             new_root.acquire_read()
+            # By the time we acquire read, root might have changed again
+            while new_root.get_id() != self.root_id:
+                new_root.release_read()
+                new_root = self.get_root()
+                new_root.acquire_read()
 
-        curr_node = new_root
-        path = []
-        search_key = old_root.keys[0]
+            curr_node = new_root
+            path = []
+            search_key = last_node.get_keys()[0]
 
-        while curr_node.get_id() != old_root.get_id():
-            # Add current node to path
-            path.append(curr_node)
+            while curr_node.get_id() != last_node.get_id():
+                # Add current node to path
+                path.append(curr_node)
+                # Find next node to add and release read lock
+                curr_node = curr_node.scan_node(search_key)
 
-            # Find next node to add and release read lock
-            next_node_id = curr_node.scan_node(search_key)
+            # Release read lock on old root (old root IS curr_node at this point)
             curr_node.release_read()
 
-            curr_node = Node.get_node(next_node_id)
-            curr_node.acquire_read()
-
-        # Release read lock on old root (old root IS curr_node at this point)
-        curr_node.release_read()
-
-        path.reverse()
-        return path
+            path.reverse()
+            return path
+        finally:
+            last_node.assert_is_unlocked_by_current_thread()
 
     def remove_key(self, key):
         self.num_keys -= 1
@@ -133,7 +135,8 @@ class BTree:
         curr_node = self.get_root()
 
         print("Printing tree...\n")
-        print(curr_node.keys, curr_node.max_key)
+        curr_node.acquire_read()
+        print(curr_node.get_keys(), curr_node.get_max_key())
 
         i = 0
         queue = []
@@ -142,15 +145,18 @@ class BTree:
             children = curr_node.get_children()
             for _, child in enumerate(children):
                 queue.append(child)
-
+            curr_node.release_read()
             curr_node = queue[i]
+            curr_node.acquire_read()
             i += 1
-
+        curr_node.release_read()
         for i, node in enumerate(queue):
+            node.acquire_read()
             if node.is_not_rightmost():
-                print(node.keys, node.max_key, node.link)
+                print(node.get_keys(), node.get_max_key())
             else:
-                print(node.keys, node.max_key, node.get_id())
+                print(node.get_keys(), node.get_max_key(), node.get_id())
+            node.release_read()
 
 
         print("-----------------------")

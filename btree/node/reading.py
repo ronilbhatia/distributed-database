@@ -114,3 +114,10 @@ class Reading:
       return idx
     finally:
       self.assert_is_locked_by_current_thread()
+
+  def max_key_is_smaller_than(self, key):
+    self.assert_is_locked_by_current_thread()
+    try:
+      return self.get_max_key() < key
+    finally:
+      self.assert_is_locked_by_current_thread()
