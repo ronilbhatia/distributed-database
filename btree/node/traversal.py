@@ -37,10 +37,6 @@ class Traversal:
 
         if self.is_not_rightmost() and self.max_key_is_smaller_than(key):
             new_node = self.scan_right_for_read_guard(key)
-            # Release read on old node and acquire read on new node
-            self.release_read()
-            new_node.acquire_read()
-
             return new_node.scan_node(key)
         
         child_idx = self.get_children_ids()[child_idx]

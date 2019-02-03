@@ -22,7 +22,7 @@ btree = core.BTree(4)
 # btree.root_id = root.id
 # btree.print()
 
-NUM_INSERTS = 10000
+NUM_INSERTS = 1000
 
 class Thread1(Thread):
     def run(self):
