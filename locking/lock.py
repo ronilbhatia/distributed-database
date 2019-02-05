@@ -14,7 +14,6 @@ class ReadWriteLock(object):
     and because it maximizes concurrency.
     """
 
-
     def __init__(self):
         self.__monitor = Lock()
         self.__exclude = Lock()

@@ -96,19 +96,19 @@ class Reading:
     finally:
       self.assert_is_locked_by_current_thread()
 
-  def find_idx(self, key):
+  def find_child_idx(self, key):
     self.assert_is_locked_by_current_thread()
     try:
-      found_idx = False
+      found_child_idx = False
       idx = None
 
       for i, curr_key in enumerate(self.get_keys()):
           if key < curr_key:
-              found_idx = True
+              found_child_idx = True
               idx = i
               break
 
-      if not found_idx:
+      if not found_child_idx:
           idx = self.num_keys()
 
       return idx
@@ -118,6 +118,6 @@ class Reading:
   def max_key_is_smaller_than(self, key):
     self.assert_is_locked_by_current_thread()
     try:
-      return self.get_max_key() < key
+      return self.get_max_key() <= key
     finally:
       self.assert_is_locked_by_current_thread()

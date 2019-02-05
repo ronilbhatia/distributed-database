@@ -1,3 +1,5 @@
+from .base import Base
+
 class Insertion:
     def add_key(self, key):
       self.acquire_read()
@@ -22,7 +24,7 @@ class Insertion:
                 new_node.release_read()
                 return new_node.add_key_leaf(key)
 
-            key_idx = self.find_idx(key)
+            key_idx = self.find_child_idx(key)
             # NR: We must add a helper to only allow this if we have a write
             # lock.
             self.get_keys().insert(key_idx, key)
@@ -48,23 +50,19 @@ class Insertion:
             # This node might have been split by the time we reach it, and no longer
             # be the appropriate sub-tree where the key exists, so we scan right
             if self.is_not_rightmost() and self.max_key_is_smaller_than(key):
-                # NR: Must release read lock first before scanning.
                 new_node = self.scan_right_for_read_guard(key)
-
                 # Unlock node for reading before doing this
                 new_node.release_read()
                 return new_node.add_key_internal(key)
             
             # if the node is not a leaf we must find the appropriate
             # child to attempt to add the key to
-            child_idx = self.find_idx(key)
+            child_idx = self.find_child_idx(key)
             child = children[child_idx]
-
             # Once appropriate child has been found, can release the read lock
             self.release_read()
 
             split_info = child.add_key(key)
-
             # if we have split_info that implies the child had to be split
             if split_info:
                 node = self
@@ -72,12 +70,11 @@ class Insertion:
                 try:
                     node.acquire_write()
 
-                    while node.is_not_rightmost() and key > node.get_max_key():
-                        new_node = node.scan_right_for_write_guard(key)
-                        node = new_node
+                    while node.is_not_rightmost() and node.max_key_is_smaller_than(key):
+                        node = node.scan_right_for_write_guard(key)
 
                     # Find child_idx again because could be at a different node
-                    child_idx = node.find_idx(key)
+                    child_idx = node.find_child_idx(key)
                     split_info = node.handle_split(split_info, child_idx)
 
                     return split_info
@@ -146,6 +143,26 @@ class Insertion:
 
             # Check that left_id is equal to the id already at children_ids[child_idx]
             if not self.get_children_ids()[child_idx] == left_id:
+                print('--------------SELF-------------')
+                print('children_ids: ', self.get_children_ids())
+                print('child_idx: ', child_idx)
+                print('median: ', median)
+                print('my keys: ', self.get_keys())
+
+                left_node = Base.get_node(left_id)
+                left_node.acquire_read()
+                print('--------------LEFT-------------')
+                print('id: ', left_id)
+                print('my keys: ', left_node.get_keys())
+                left_node.release_read()
+
+                right_node = Base.get_node(right_id)
+                right_node.acquire_read()
+                print('--------------RIGHT-------------')
+                print('id: ', right_id)
+                print('my keys: ', right_node.get_keys())
+                right_node.release_read()
+
                 raise "Not at the correct parent node"
 
             # NR: These insert calls don't check whether we have the lock.
@@ -163,37 +180,3 @@ class Insertion:
             return split_info
         finally:
             self.assert_is_unlocked_by_current_thread()
-
-
-# def add_key_root(self, key):
-#         if self.is_leaf():
-#             self.acquire_write()
-#             print("Locked root with keys ", self.keys)
-
-#             if self.is_not_rightmost() and key > self.max_key:
-#                 self.release_write()
-#                 new_node = self.scan_right_for_write_guard(key)
-#                 return new_node.add_key_root(key)
-
-#             key_idx = self.find_idx(key)
-#             self.keys.insert(key_idx, key)
-
-#             if self.overflow():
-#                 return {'split_info': 'leaf overflow', 'node': self, 'child_idx': None}
-#             else:
-#                 self.release_write()
-#                 print("Unlocked root")
-#                 return {'split_info': None, 'child_idx': None}
-#         else:
-#             children = self.get_children()
-
-#             # if the node is not a leaf we must find the appropriate
-#             # child to attempt to add the key to
-
-#             #TODO Add read lock
-#             child_idx = self.find_idx(key)
-#             child = children[child_idx]
-
-#             split_info = children[child_idx].add_key(key)
-
-#             return {'node': self, 'split_info': split_info, 'child_idx': child_idx}

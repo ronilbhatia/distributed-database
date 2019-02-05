@@ -21,7 +21,7 @@ class Deletion:
 
     def remove_key_internal(self, key):
         children = self.get_children()
-        child_idx = self.find_idx(key)
+        child_idx = self.find_child_idx(key)
 
         res = children[child_idx].remove_key(key)
 
