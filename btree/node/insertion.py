@@ -2,18 +2,21 @@ from .base import Base
 
 class Insertion:
     def add_key(self, key):
-      self.acquire_read()
-      is_leaf = self.is_leaf()
-      self.release_read()
+        self.assert_is_unlocked_by_current_thread()
+        try:
+            self.acquire_read()
+            is_leaf = self.is_leaf()
+            self.release_read()
 
-      if is_leaf:
-          return self.add_key_leaf(key)
-      else:
-          return self.add_key_internal(key)
+            if is_leaf:
+                return self.add_key_leaf(key)
+            else:
+                return self.add_key_internal(key)
+        finally:
+            self.assert_is_unlocked_by_current_thread()
 
     def add_key_leaf(self, key):
         self.assert_is_unlocked_by_current_thread()
-
         try:
             self.acquire_write()
 
@@ -27,7 +30,8 @@ class Insertion:
             key_idx = self.find_child_idx(key)
             # NR: We must add a helper to only allow this if we have a write
             # lock.
-            self.get_keys().insert(key_idx, key)
+            # RB: Updated
+            self.insert_key(key_idx, key)
 
             # if the node is overflowed we need to split it
             if self.overflow():
@@ -42,7 +46,6 @@ class Insertion:
 
     def add_key_internal(self, key):
         self.assert_is_unlocked_by_current_thread()
-
         try:
             # Need to lock self before reading anything
             self.acquire_read()
@@ -50,6 +53,7 @@ class Insertion:
             # This node might have been split by the time we reach it, and no longer
             # be the appropriate sub-tree where the key exists, so we scan right
             if self.is_not_rightmost() and self.max_key_is_smaller_than(key):
+                print("I'm not the right node, I have keys: ", self.get_keys(), "my max key is: ", self.get_max_key(), "but I'm trying to add the key: ", key)
                 new_node = self.scan_right_for_read_guard(key)
                 # Unlock node for reading before doing this
                 new_node.release_read()
@@ -85,7 +89,6 @@ class Insertion:
 
     def split(self):
         self.assert_is_write_locked_by_current_thread()
-
         try:
             mid_idx = self.num_keys()//2
 
@@ -131,7 +134,6 @@ class Insertion:
 
     def handle_split(self, split_info, child_idx):
         self.assert_is_write_locked_by_current_thread()
-
         try:
             median = split_info['median']
             left_id = split_info['left_id']
@@ -163,12 +165,13 @@ class Insertion:
                 print('my keys: ', right_node.get_keys())
                 right_node.release_read()
 
-                raise "Not at the correct parent node"
+                # raise "Not at the correct parent node"
 
             # NR: These insert calls don't check whether we have the lock.
             # Should add a method for them.
-            self.get_children_ids().insert(child_idx + 1, right_id)
-            self.get_keys().insert(child_idx, median)
+            # RB: Updated
+            self.insert_child_id(child_idx + 1, right_id)
+            self.insert_key(child_idx, median)
 
             # If the node is overflowed we must split it.
             if self.overflow():
@@ -180,3 +183,17 @@ class Insertion:
             return split_info
         finally:
             self.assert_is_unlocked_by_current_thread()
+    
+    def insert_key(self, idx, key):
+        self.assert_is_write_locked_by_current_thread()
+        try:
+            self.get_keys().insert(idx, key)
+        finally:
+            self.assert_is_write_locked_by_current_thread()
+
+    def insert_child_id(self, idx, child_id):
+        self.assert_is_write_locked_by_current_thread()
+        try:
+            self.get_children_ids().insert(idx, child_id)
+        finally:
+            self.assert_is_write_locked_by_current_thread()
